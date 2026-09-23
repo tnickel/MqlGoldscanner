@@ -16,6 +16,89 @@ from goldscanner.app_state import hole_db
 from goldscanner.help_content import KNOTEN_INFO
 
 
+def _knoten_quellen(knoten: str) -> list[tuple[str, str, str]]:
+    """(Label, URL oder "", Hinweis) je Knoten — URLs direkt aus den
+    Adapter-Modulen gezogen, damit sie mit dem Code identisch bleiben."""
+    from goldscanner.adapter import kalender as _kal
+    from goldscanner.adapter import news as _news
+    from goldscanner.adapter import quant as _quant
+    from goldscanner.modell.quant_feeds import GLD_OPTIONS_URL, GVZ_URL
+    from goldscanner import config as _cfg
+
+    namen_kal = {"ff": "ForexFactory (diese Woche)",
+                 "bls": "US-Arbeitsamt BLS (Kalender)",
+                 "bea": "BEA Wirtschaftsanalyse (Kalender)",
+                 "fed": "Federal Reserve (Termin-JSON)",
+                 "treasury": "US-Finanzministerium TreasuryDirect"}
+    if knoten == "kurse":
+        return [("", "", "MetaTrader-5-Terminal des Brokers (Tickmill) — "
+                         "Symbol " + (_cfg.load_settings().get("mt5_symbol")
+                                      or "XAUUSD")
+                         + "; nur lesender Zugriff per Whitelist"),
+                ("MetaQuotes", "https://www.metaquotes.net/en/terminals",
+                 "Terminal-Hersteller; Kursdaten stammen vom Broker-Feed")]
+    if knoten == "kalender":
+        return [(namen_kal.get(qid, qid), url, "Abruf je Wochenlauf, Hash-archiviert")
+                for qid, url, _a, _p in _kal._QUELLEN] + [
+                ("", "", "Regeltermine (Gold-FND/LTD, Opex, Feiertage, DST) "
+                         "werden lokal berechnet — keine URL")]
+    if knoten == "gvz":
+        zeilen = [("Cboe GVZ-Historie", GVZ_URL,
+                   "implizite 30-Tage-Gold-Volatilität aus Optionen"),
+                  ("GLD-Options-JSON (iv30)", GLD_OPTIONS_URL,
+                   "verzögerte Optionskette, Expected-Move-Prüfung")]
+        for kuerzel, serie in _quant.FRED_SERIEN.items():
+            zeilen.append((f"FRED {serie}", f"https://fred.stlouisfed.org/series/{serie}",
+                           kuerzel))
+        zeilen += [
+            ("CFTC Commitments of Traders (Gold 088691)",
+             f"https://publicreporting.cftc.gov/resource/{_quant.COT_DATASET}"
+             "?cftc_contract_market_code=088691",
+             "Fonds-Positionen, 4 Tage nach Stichtag"),
+            ("SPDR GLD Bestände (Tonnen)", _quant.GLD_URL,
+             "XLSX-Archiv, ToS: private Nutzung")]
+        return zeilen
+    if knoten == "news":
+        return [(qid, url, "RSS-Feed") for qid, url in _news.QUELLEN]
+    if knoten == "community":
+        return [
+            ("TradingView Ideen (OANDA:XAUUSD)",
+             "https://www.tradingview.com/feed/?symbol=OANDA:XAUUSD",
+             "30 Ideen; Long/Short + Kursmarken — ToS: privat/Anzeige"),
+            ("FXStreet Analysen", "https://www.fxstreet.com/rss/analysis", "RSS"),
+            ("FXEmpire Prognosen",
+             "https://www.fxempire.com/api/v1/en/articles/rss/forecasts", "RSS"),
+            ("Kitco Weekly Gold Survey",
+             "https://www.kitco.com/news/category/weekly-gold-survey",
+             "Best-Effort (HTML ohne RSS)")]
+    if knoten in ("news_distill", "comm_destill", "fusion"):
+        return [
+            ("GLM-API (Z.ai)", _cfg.glm_base_url(_cfg.load_settings()) + "/chat/completions",
+             ("glm-5.3-flash (Destillation)" if knoten != "fusion"
+              else "glm-5.3 (Analytiker)") + " — vollständige Prompte/Antworten "
+             "im Journal (Seite Journal)"),
+            ("Z.ai API-Dokumentation", "https://api.z.ai", "Endpunkt umschaltbar: "
+             "Abo (Coding) / Pay-as-you-go")]
+    if knoten == "statistik":
+        return [
+            ("", "", "Eigenberechnung aus den lokalen Kursen — keine externe "
+                     "Quelle (Engine rechnet, LLM zitiert)"),
+            ("Corsi/Andersen (HAR-Grundlage)",
+             "https://doi.org/10.2139/ssrn.1010579",
+             "„Realized Volatility Almost Everything“ (2003/2009)"),
+            ("CBOE GVZ (Feature)", GVZ_URL, "eins der Modell-Merkmale")]
+    if knoten == "matrix":
+        return [("", "", "Interne Berechnung — jede Version as_of archiviert; "
+                         "lesbar über REST 127.0.0.1:8606/matrix")]
+    if knoten == "pdf":
+        return [("", "", "reportlab-generiert aus der Matrix; Dateien in "
+                         "data/reports/ (Download-Buttons oben)")]
+    if knoten == "export":
+        return [("", "", "CSV: data/exports/goldscanner_prognose.csv + "
+                         "MT5-Common-Files (identisch)")]
+    return []
+
+
 @st.dialog("Knoten-Details", width="large")
 def knoten_dialog(knoten: str, settings: dict) -> None:
     titel, text = KNOTEN_INFO[knoten]
@@ -26,6 +109,16 @@ def knoten_dialog(knoten: str, settings: dict) -> None:
         _live_daten(knoten, settings)
     except Exception as exc:
         st.caption(f"(Live-Daten gerade nicht verfügbar: {type(exc).__name__})")
+    quellen = _knoten_quellen(knoten)
+    if quellen:
+        st.divider()
+        st.markdown("**Quellen — woher das kommt**")
+        for label, url, hinweis in quellen:
+            link = (f"[{label}]({url})" if url and label
+                    else (label or hinweis or ""))
+            st.markdown(f"· {link}"
+                        + (f" — {hinweis}" if url and label and hinweis else
+                           (" — " + hinweis if not label and hinweis else "")))
     if st.button("Schließen", icon=":material/close:", type="primary"):
         st.query_params.pop("knoten", None)
         st.rerun()
