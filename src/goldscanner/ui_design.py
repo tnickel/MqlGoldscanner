@@ -439,7 +439,11 @@ def agenten_baum_html(status: dict[str, str] | None = None) -> str:
               "running": ("#4a3b14", "#F5D67B", "#E8B84B"),
               "complete": ("#12331f", "#6EE7B7", "#10B98188")}
     teile = [
-        '<svg viewBox="0 0 820 420" style="width:100%;height:auto" '
+        # Feste Maximalbreite (statt width:100%): Der Baum zoomt damit wie
+        # normaler Text mit dem Browser-Zoom statt mit der Spaltenbreite zu
+        # skalieren — Rauszoomen verkleinert auch die Knoten-Schrift.
+        '<svg viewBox="0 0 820 420" style="width:100%;max-width:820px;'
+        'height:auto;display:block;margin:0 auto" '
         'role="img" aria-label="Wochenlauf-Baum">',
         '<style>.gk-run{animation:gk-puls 1.2s ease-in-out infinite}'
         '@keyframes gk-puls{0%,100%{opacity:1}50%{opacity:.45}}'
