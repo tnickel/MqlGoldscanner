@@ -162,6 +162,9 @@ def _lauf_anzeige():
                 steps.append({"nr": i + 1, "title": name, "status": status,
                               "meta": meta})
             zeige_stepper(steps, overall=(idx + 1) / len(LAUF_STATIONEN))
+            st.caption("Kette = **Fortschritt** (was läuft, was kommt) · "
+                       "Baum = **Stufen & Verknüpfung** (wovon hängt was ab) — "
+                       "beide zeigen denselben Lauf.")
             zeige_agenten_baum(_baum_status(z))
             status_feed(list(reversed(z["meldungen"][-6:])) or ["Start …"])
         else:                                   # fertig im Fragment-Takt
@@ -180,7 +183,11 @@ with st.container(border=True):
                                     vertical_alignment="center")
     with Kopf_links:
         st.markdown("**So ist der Wochenlauf aufgebaut** — Datenquellen oben "
-                    "laufen zusammen; was gold leuchtet, arbeitet gerade.")
+                    "laufen zusammen; was gold leuchtet, arbeitet gerade. "
+                    "Die Kette darüber zeigt während eines Laufs den "
+                    "**Fortschritt** (Reihenfolge), dieser Baum zeigt die "
+                    "**Stufen und ihr Zusammenspiel** — derselbe Lauf, zwei "
+                    "Blickwinkel.")
     with kopf_i:
         _info_button("wochenlauf", kkey="baum")
     zeige_agenten_baum(_baum_status(lauf_zustand.lesen()))
