@@ -1,7 +1,7 @@
-# MqlGoldscanner — Stufenplan (v1.4, 23.09.2026)
+# MqlGoldscanner — Stufenplan (v1.5, 23.09.2026)
 
 > **Technologie-Wechsel 23.09.2026:** Nach Nutzer-Entscheidung läuft die Umsetzung auf
-> **Python/Streamlit** (wie der MqlKiScanner), nicht mehr Java/JavaFX. **S1–S4 sind in
+> **Python/Streamlit** (wie der MqlKiScanner), nicht mehr Java/JavaFX. **S1–S5 sind in
 > Python fertig abgenommen.** Die Java-Inhalte der Stufenbeschreibungen unten sind
 > historisch zu lesen.
 >
@@ -34,6 +34,28 @@
 > max_tokens (16k/12k) — finish_reason=length warf anfangs alles weg.
 > **Tor T4 wird über kommende Wochen im Track-Record gemessen** (S6): Bringt das
 > LLM-Delta Brier-Mehrwert? Systematisch „immer +10 pp" → Band straffen.
+>
+> **S5 abgenommen 23.09.2026 — Tor T5 ehrlich NICHT bestanden:** Quant-Adapter live
+> (FRED: DFII10/T10YIE/DGS10/DTWEXBGS/VIXCLS ohne Key; CFTC Disaggregated 72hh-3qpy
+> mit 1.058 Wochen Managed-Money-Netto und Stichtag+4-Veröffentlichungsregel; GLD-
+> Tonnen aus dem XLSX-Archiv mit Disclaimer-Sheet und „US Holiday"-Zeilen; LBMA
+> bewusst weg — Broker-Kurse sind der bessere Preis). D1-Historie auf **4.354 Bars
+> (17 Jahre)** erweitert. Richtungsmodell (Logit, Newton-Raphson, Standardisierung +
+> Ridge) mit Ablation auf identischen Testtagen: **R1_trend BSS −0,0028 · R2_makro
+> −0,0072 · R3_position −0,0104 gegen die Ø-Aufwärtswahrscheinlichkeit 52,4 %**
+> (n_test=4.078) — die tägliche Gold-Richtung ist mit Trend/Makro/Positionierung
+> nicht vorhersagbar. Konsequenz (Tor-Logik „Stillstand → Feeds kürken statt
+> erweitern"): Richtungssymbole ▲▲…▼▼ bleiben im Angebot, aber klar als
+> „nicht verifiziert" gekennzeichnet; keine weiteren Feed-Ausbauten fürs
+> Richtungsmodell. Die Quant-Feeds bleiben als **Marktlage-Infrastruktur** (ΔRealzins,
+> ΔDollar, COT-Perzentil, GLD-Δ, Crowding-Flags — fließen in Dashboard/PDF und
+> S4-Analytiker-Kontext). Nachkalibrierung technisch komplett: Platt sofort,
+> **Isotonic (PAVA) ab 500 Beobachtungen** — greift live, kalibriert aber ein Modell
+> ohne Skill (ehrlich dokumentiert). Session-/Gap-Agent: Asia-Range bis 08:00 MEZ +
+> Wochenend-Gap aus H1, empirische bedingte Bewegungs-P (Bucket ±25 % der Schwelle)
+> auf der Tagessicht. **Wichtig für S3-Statistik:** Auf 17 Jahren gewinnt im
+> Movement-Backtest jetzt har_D (BSS +0,067 statt B +0,161 auf 4 Jahren) — Events+IV
+> helfen langfristig; Tor T3 bleibt bestanden. 80 pytest grün.
 
 Verfeinerung von §13 des Konzepts (`doc/00_konzept.md`). Ziel: Umsetzung in **7 Stufen**,
 die jeweils für sich abgeschlossen, testbar und **nutzbar** sind — die App bleibt nach

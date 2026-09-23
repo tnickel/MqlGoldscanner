@@ -21,6 +21,7 @@ from .modell import har
 from .modell.event_multiplikatoren import multiplikatoren
 from .modell.features import KONFIGURATIONEN, tages_zeilen
 from .modell.quant_feeds import gvz_vor
+from .modell import richtung as richtung_modul
 
 BERLIN = ZoneInfo("Europe/Berlin")
 
@@ -109,6 +110,62 @@ def _modell_sektion(db, settings: dict, d1: list[dict], ziele_schwellen: dict) -
     }
 
 
+def _marktlage(db, d1: list[dict]) -> dict:
+    """Aktueller Makro-/Positionierungs-Schnappschuss für die UI (S5)."""
+    from .modell.richtung import _aktuelle_features
+    feats = _aktuelle_features(d1, db) or {}
+    cot = db.quant_laden("cot_mm_netto")
+    cot_wert = cot_perzentil = None
+    if cot:
+        letzter_stichtag = max(cot)
+        cot_wert = cot[letzter_stichtag]
+        werte = sorted(cot.values())
+        cot_perzentil = round(100.0 * sum(1 for w in werte if w <= cot_wert)
+                              / len(werte), 1)
+    vix = db.quant_laden("fred_vixcls")
+    vix_aktuell = vix.get(max(vix)) if vix else None
+    flags: list[str] = []
+    if cot_perzentil is not None and cot_perzentil >= 90:
+        flags.append("COT-Crowding: Managed Money extrem long (Historien-"
+                     f"Perzentil {cot_perzentil:.0f} %) — anfällig für "
+                     "Long-Liquidation")
+    if cot_perzentil is not None and cot_perzentil <= 10:
+        flags.append(f"COT-Extrem kurz (Perzentil {cot_perzentil:.0f} %) — "
+                     "historisch Kontra-Boden")
+    if feats.get("gld_delta5_pct") is not None:
+        if feats["gld_delta5_pct"] >= 1.0:
+            flags.append(f"ETF-Zuflüsse stark ({feats['gld_delta5_pct']:+.1f} % "
+                         "GLD-Bestand 5T)")
+        elif feats["gld_delta5_pct"] <= -1.0:
+            flags.append(f"ETF-Abflüsse ({feats['gld_delta5_pct']:+.1f} % "
+                         "GLD-Bestand 5T)")
+    if feats.get("d_realzins5") is not None:
+        if feats["d_realzins5"] <= -0.10:
+            flags.append(f"Realzins 5T {feats['d_realzins5']:+.2f} pp — "
+                         "goldfreundlich")
+        elif feats["d_realzins5"] >= 0.10:
+            flags.append(f"Realzins 5T {feats['d_realzins5']:+.2f} pp — "
+                         "goldbelastend")
+    if feats.get("d_dollar5") is not None:
+        if feats["d_dollar5"] <= -0.5:
+            flags.append(f"Dollar 5T {feats['d_dollar5']:+.2f} % — "
+                         "goldfreundlich")
+        elif feats["d_dollar5"] >= 0.5:
+            flags.append(f"Dollar 5T {feats['d_dollar5']:+.2f} % — "
+                         "goldbelastend")
+    return {
+        "d_realzins5_pp": feats.get("d_realzins5"),
+        "d_dollar5_pct": feats.get("d_dollar5"),
+        "gvz_level": feats.get("gvz_level"),
+        "vix": vix_aktuell,
+        "cot_netto": cot_wert,
+        "cot_stichtag": max(cot) if cot else None,
+        "cot_perzentil": cot_perzentil,
+        "gld_delta5_pct": feats.get("gld_delta5_pct"),
+        "flags": flags,
+    }
+
+
 def baue_matrix(db, settings: dict, basis: date | None = None) -> dict:
     symbol = settings.get("mt5_symbol", "XAUUSD")
     fenster = int(settings.get("matrix_fenster", 13))
@@ -132,6 +189,28 @@ def baue_matrix(db, settings: dict, basis: date | None = None) -> dict:
         ziele_schwellen[d.isoformat()] = (d.weekday(), s)
 
     modell = _modell_sektion(db, settings, d1, ziele_schwellen)
+
+    # Richtung (S5): P(hoch) je Zieltag + Backtest/Tor T5 — Fehler tolerieren
+    richtung: dict | None = None
+    try:
+        richtung = richtung_modul.wochen_prognose(
+            db, d1, list(ziele_schwellen.keys()))
+    except Exception:
+        richtung = None
+    if richtung and richtung.get("backtest"):
+        bt = richtung["backtest"]
+        kal = bt.get("kalibrierung") or {}
+        db.kalibrierung_speichern(
+            "richtung", richtung["konfiguration"], kal.get("methode") or "keine",
+            json.dumps({"bss": bt.get("bss"), "kal_brier_2haelfte":
+                        kal.get("brier_2haelfte")}, ensure_ascii=False),
+            n_train=int(bt.get("n_vollstaendig", 0)) - int(bt.get("n_test", 0)),
+            n_test=int(bt.get("n_test", 0)),
+            brier=next((e["brier"] for e in bt.get("ergebnisse", [])
+                        if e["konfiguration"] == richtung["konfiguration"]), None),
+            brier_baseline=bt.get("brier_baseline"),
+            bss=bt.get("bss"),
+            meta=f"tor_t5={'bestanden' if bt.get('tor_t5_bestanden') else 'nicht bestanden'}")
 
     tage: list[dict] = []
     for i in range(5):
@@ -185,6 +264,7 @@ def baue_matrix(db, settings: dict, basis: date | None = None) -> dict:
                 "previous": e.get("previous"),
                 "actual": e.get("actual_latest") or e.get("actual_first"),
             } for e in top],
+            "richtung": (richtung["je_tag"].get(iso) if richtung else None),
         })
 
     # Schwellen-Tabelle: P(TR > 1,0×/1,5×/2,0× Ø-TR) je Wochentag
@@ -213,6 +293,8 @@ def baue_matrix(db, settings: dict, basis: date | None = None) -> dict:
         },
         "tage": tage,
         "schwellen_tabelle": schwellen_tabelle,
+        "richtung": richtung,
+        "marktlage": _marktlage(db, d1),
     }
     db.prognose_speichern(matrix["woche"], matrix["modell"],
                           json.dumps(matrix, ensure_ascii=False))

@@ -20,30 +20,43 @@ from goldscanner.ui_design import page_header, status_feed, zeige_stepper
 from goldscanner.wochenlauf import starten as wochenlauf_starten
 from goldscanner.wochenmatrix import baue_matrix
 
+# Letzte gespeicherte Matrix früh ziehen (bevor Stepper/Kopf sie brauchen)
+if "matrix" not in st.session_state:
+    letzte_frueh = hole_db().prognose_letzte()
+    if letzte_frueh:
+        try:
+            st.session_state["matrix"] = json.loads(letzte_frueh["inhalt"])
+        except (json.JSONDecodeError, TypeError):
+            pass
+
 page_header(
-    "Stufe 2/3/4 · Statistik + Modell + KI-Erklärung",
+    "Stufe 2–5 · Statistik + Modell + KI-Erklärung + Richtung",
     "Gold-Bewegungswahrscheinlichkeit je Wochentag",
-    "Hauptziel: pro Tag **Wahrscheinlichkeit**, **erwartete Range** und (ab S5) "
-    "**Richtung**. Die Matrix zeigt P_stat aus dem HAR-Modell (HAR-Lags + Events + "
-    "GVZ) neben der Klimatologie-Basisrate; der Analytiker-Agent verschiebt P im "
-    "engeren Band (±{band} pp) nur mit Begründung. Tor T3: nur Modelle mit "
-    "BSS > 0 gegen die Basisrate kommen auf die Matrix.".format(
+    "Hauptziel: pro Tag **Wahrscheinlichkeit**, **erwartete Range** und "
+    "**Richtung** (P(hoch)). Die Matrix zeigt P_stat aus dem HAR-Modell (HAR-Lags "
+    "+ Events + GVZ) neben der Klimatologie-Basisrate; der Analytiker-Agent "
+    "verschiebt P im engeren Band (±{band} pp) nur mit Begründung. Tor T3: nur "
+    "Modelle mit BSS > 0 gegen die Basisrate kommen auf die Matrix.".format(
         band=int(config.load_settings().get("llm_band_pp", 10))),
 )
 
-_llm_ok = bool((st.session_state.get("matrix") or {}).get("llm", {}).get("ok"))
+_matrix_state = st.session_state.get("matrix") or {}
+_llm_ok = bool(_matrix_state.get("llm", {}).get("ok"))
+_t5_ok = bool((_matrix_state.get("richtung") or {}).get("backtest", {})
+              .get("tor_t5_bestanden"))
 zeige_stepper([
     {"nr": 1, "title": "Gerüst & Kurse", "status": "complete", "meta": "App · MT5 · GLM"},
     {"nr": 2, "title": "Klimatologie-Matrix", "status": "complete", "meta": "Kalender · Basisrate"},
-    {"nr": 3, "title": "Kalibriertes Modell", "status": "complete" if (
-        st.session_state.get("matrix") or {}).get("modell_info", {}).get("tor_t3_bestanden")
+    {"nr": 3, "title": "Kalibriertes Modell", "status": "complete" if
+        _matrix_state.get("modell_info", {}).get("tor_t3_bestanden")
         else "pending", "meta": "HAR · Events · GVZ"},
     {"nr": 4, "title": "LLM-Erklärungen", "status": "complete" if _llm_ok else "pending",
      "meta": "Treiber · Begründung · PDF"},
-    {"nr": 5, "title": "Richtung & Quant", "status": "pending", "meta": "P(hoch) · COT · FRED"},
+    {"nr": 5, "title": "Richtung & Quant", "status": "complete" if _t5_ok else "pending",
+     "meta": "P(hoch) · COT · FRED"},
     {"nr": 6, "title": "Betrieb & Track-Record", "status": "pending", "meta": "Daemon · BSS · Scout"},
     {"nr": 7, "title": "Ausbau", "status": "pending", "meta": "optional"},
-], overall=(4 if _llm_ok else 3) / 7)
+], overall=(5 if _t5_ok else (4 if _llm_ok else 3)) / 7)
 
 settings = config.load_settings()
 
@@ -96,14 +109,6 @@ if aktualisieren:
     st.session_state["matrix"] = baue_matrix(hole_db(), settings)
 
 matrix = st.session_state.get("matrix")
-if not matrix:
-    # Letzte gespeicherte Matrix zeigen (bevorzugt die Version mit LLM-Fusion)
-    letzte = hole_db().prognose_letzte()
-    if letzte:
-        try:
-            matrix = json.loads(letzte["inhalt"])
-        except (json.JSONDecodeError, TypeError):
-            matrix = None
 if matrix:
     st.divider()
     basis = matrix["basis"]
@@ -153,6 +158,14 @@ if matrix:
                 st.markdown(f'<span style="color:{farbe};font-weight:700">'
                             f'● {tag["warnstufe"].upper()}</span>',
                             unsafe_allow_html=True)
+                r = tag.get("richtung")
+                if r:
+                    r_farbe = "#34D399" if r["symbol"].startswith("▲") else (
+                        "#FB7185" if r["symbol"].startswith("▼") else "#94A3B8")
+                    st.markdown(
+                        f'Richtung <span style="color:{r_farbe};font-weight:800">'
+                        f'{r["symbol"]}</span> · P(hoch) {r["p_hoch"] * 100:.0f} %',
+                        unsafe_allow_html=True)
                 st.caption(f"Schwelle B: {tag['schwelle_usd']} USD "
                            f"({tag['schwelle_pct']} %)")
                 if tag["q10_usd"] is not None:
@@ -207,6 +220,62 @@ if matrix:
                 st.markdown("**Gemessene Event-Multiplikatoren** (historisch, "
                             "NFP = erster-Freitag-Proxy, FOMC aus Fed-Historie):")
                 st.dataframe(mult, hide_index=True, width="stretch")
+
+    richtung_sek = matrix.get("richtung")
+    marktlage = matrix.get("marktlage") or {}
+    if richtung_sek:
+        bt = richtung_sek.get("backtest") or {}
+        with st.expander(
+                f"Richtung & Marktlage (Stufe 5) — P(hoch) je Tag · Tor T5 "
+                f"{'BESTANDEN' if bt.get('tor_t5_bestanden') else 'offen/nicht bestanden'}"):
+            if bt.get("tor_t5_bestanden"):
+                st.success(f"**Tor T5:** Konfiguration `{richtung_sek['konfiguration']}` "
+                           f"schlägt die Ø-Aufwärtswahrscheinlichkeit im Walk-Forward "
+                           f"(BSS {bt.get('bss', 0):+.3f}, n={bt.get('n_test')} Testtage).")
+            else:
+                st.warning("**Tor T5 nicht bestanden:** Das Richtungsmodell schlägt die "
+                           "Baseline nicht — die Richtungs-Symbole bleiben mit Vorsicht "
+                           "zu lesen (qualitative Einschätzung, klar gekennzeichnet).")
+            ab = pd.DataFrame(bt.get("ergebnisse", [])).rename(columns={
+                "konfiguration": "Konfiguration", "n": "n Test", "brier": "Brier",
+                "bss": "BSS vs. Ø-Rate"})
+            if not ab.empty:
+                st.markdown(f"Baseline (immer Ø-Aufwärtswahrscheinlichkeit "
+                            f"{richtung_sek.get('base_rate', 0) * 100:.1f} %): "
+                            f"Brier **{bt.get('brier_baseline', 0):.4f}**")
+                st.dataframe(ab, hide_index=True, width="stretch")
+                st.caption("Ablation auf identischen Testtagen (complete-case): "
+                           "R1 Trend → R2 +Makro (Realzins/Dollar/GVZ) → "
+                           "R3 +Positionierung (COT/GLD). Nachkalibrierung: "
+                           f"{(bt.get('kalibrierung') or {}).get('methode')} "
+                           "(1. OOS-Hälfte gefittet, 2. bewertet: Brier "
+                           f"{(bt.get('kalibrierung') or {}).get('brier_2haelfte')}). "
+                           "FRED-Daten konservativ mit t−2 genutzt, COT erst ab "
+                           "Stichtag+4 (Veröffentlichungsverzug) — kein Look-ahead.")
+            if marktlage:
+                m1, m2, m3, m4 = st.columns(4, gap="small")
+                with m1:
+                    st.metric("Δ Realzins 5T (pp)",
+                              "–" if marktlage.get("d_realzins5_pp") is None
+                              else f"{marktlage['d_realzins5_pp']:+.2f}", border=True)
+                with m2:
+                    st.metric("Δ Dollar 5T (%)",
+                              "–" if marktlage.get("d_dollar5_pct") is None
+                              else f"{marktlage['d_dollar5_pct']:+.2f}", border=True)
+                with m3:
+                    st.metric("COT MM Netto",
+                              "–" if marktlage.get("cot_netto") is None
+                              else f"{marktlage['cot_netto'] / 1000:.0f}k "
+                                    f"(P{marktlage.get('cot_perzentil'):.0f})",
+                              border=True)
+                with m4:
+                    st.metric("GLD-Bestand Δ5T (%)",
+                              "–" if marktlage.get("gld_delta5_pct") is None
+                              else f"{marktlage['gld_delta5_pct']:+.2f}", border=True)
+                if marktlage.get("flags"):
+                    st.markdown("**Marktlage-Signale:**")
+                    for f in marktlage["flags"]:
+                        st.markdown(f"· {f}")
 
     if llm_sektion.get("ok"):
         band = llm_sektion.get("band_pp", 10)
@@ -345,14 +414,11 @@ with rechts:
     with st.container(border=True):
         st.subheader("So geht es weiter", width="content")
         st.markdown(
-            "**S5 — Richtung & Quant-Feeds**  \n"
-            "Richtungsmodell P(hoch), COT/GLD/FRED, Isotonic-Kalibrierung "
-            "(die Kanten sind noch nicht perfekt kalibriert — Platt brachte OOS "
-            "≈ 0).\n\n"
             "**S6 — Betrieb & Selbstverbesserung**  \n"
             "Daemon, Track-Record, URL-Scout, MT5-Export der Prognosen.\n\n"
-            "**Tor T4:** Nach einigen Wochen wird gemessen, ob das LLM-Delta "
-            "(die KI-Anpassungen) historisch Mehrwert bringt — sonst Band auf 0.")
+            "**Tor T4/T5 im Track-Record:** Nach einigen Wochen wird gemessen, ob "
+            "das LLM-Delta und die Quant-Feeds historisch Mehrwert bringen — "
+            "sonst Band straffen bzw. Feeds kürzen.")
     with st.container(border=True):
         st.subheader("Jetzt sinnvoll", width="content")
         st.markdown(

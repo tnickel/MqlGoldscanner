@@ -15,6 +15,7 @@ from . import secrets_store
 from .adapter import community as community_adapter
 from .adapter import kalender
 from .adapter import news as news_adapter
+from .adapter import quant as quant_adapter
 from .agenten import analytiker, destillation
 from .bericht import pdf as pdf_bericht
 from .llm.client import GlmClient
@@ -38,12 +39,13 @@ def _client_bauen(settings: dict, db) -> GlmClient | None:
 
 def starten(db, settings: dict) -> dict:
     """Läuft synchron (UI zeigt Aktivitäts-Badge). Rückgabe: Gesamtprotokoll."""
-    protokoll: dict = {"kurse": {}, "kalender": {}, "gvz": {}, "matrix": {},
-                       "news": {}, "community": {}, "llm": {}, "pdf": {}}
+    protokoll: dict = {"kurse": {}, "kalender": {}, "gvz": {}, "quant": {},
+                       "matrix": {}, "news": {}, "community": {}, "llm": {},
+                       "pdf": {}}
 
     lauf = db.lauf_starten(
         "wochenlauf",
-        "Kurse + Kalender + GVZ + Matrix (S2/S3) + LLM-Schicht (S4)")
+        "Kurse + Kalender + Quant-Feeds + Matrix (S2–S5) + LLM-Schicht (S4)")
     try:
         # 1) Kurse frisch halten (Fehler tolerieren: DB-Bestand reicht notfalls)
         try:
@@ -67,7 +69,14 @@ def starten(db, settings: dict) -> dict:
         except Exception as exc:
             protokoll["gvz"] = {"ok": False, "grund": f"{type(exc).__name__}: {exc}"}
 
-        # 4) Matrix aus lokalen Daten (Klimatologie + HAR-Modell + Tor-T3-Backtest)
+        # 3b) Quant-Feeds (S5): FRED-Realzins/Dollar/VIX, COT, GLD — jede
+        # Quelle einzeln fehler-tolerant; ohne sie bleibt Richtung auf R1/R2
+        try:
+            protokoll["quant"] = quant_adapter.quant_abruf(db, settings)
+        except Exception as exc:
+            protokoll["quant"] = {"ok": False, "grund": f"{type(exc).__name__}: {exc}"}
+
+        # 4) Matrix aus lokalen Daten (Klima + HAR + Richtung S5)
         matrix = baue_matrix(db, settings)
         protokoll["matrix"] = {"ok": True, "woche": matrix["woche"],
                                "modell": matrix["modell"]}
@@ -138,11 +147,13 @@ def starten(db, settings: dict) -> dict:
         }
         db.schritt(
             lauf, "wochenlauf", "gesamt",
-            "kurse→kalender→gvz→matrix→news→community→fusion→pdf",
+            "kurse→kalender→gvz→quant→matrix→news→community→fusion→pdf",
             f"kurse={'ok' if protokoll['kurse'].get('ok') else 'DB-Fallback'} · "
             f"kalender={'ok' if protokoll['kalender'].get('ok') else 'teilweise'} · "
             f"gvz={'ok' if protokoll['gvz'].get('ok') else 'fehlt'} · "
+            f"quant={'ok' if protokoll['quant'].get('ok') else 'teilweise'} · "
             f"matrix={matrix['modell']} · "
+            f"richtung={'ok' if matrix.get('richtung') else 'aus'} · "
             f"news={protokoll['news'].get('neu', '?')} neu · "
             f"fusion={'ok' if protokoll['llm'].get('ok') else 'aus'} · "
             f"pdf={'ok' if protokoll['pdf'].get('ok') else 'aus'}",

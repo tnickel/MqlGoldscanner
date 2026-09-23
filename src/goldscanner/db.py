@@ -13,7 +13,7 @@ from pathlib import Path
 
 from . import config
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
@@ -67,6 +67,11 @@ CREATE TABLE IF NOT EXISTS meldungen (
     id INTEGER PRIMARY KEY AUTOINCREMENT, zeit TEXT NOT NULL,
     woche TEXT NOT NULL, art TEXT NOT NULL, text TEXT NOT NULL,
     gelesen INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS kalibrierung (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, as_of TEXT NOT NULL,
+    ziel TEXT NOT NULL, konfiguration TEXT NOT NULL, methode TEXT NOT NULL,
+    parameter TEXT NOT NULL, n_train INTEGER, n_test INTEGER,
+    brier REAL, brier_baseline REAL, bss REAL, meta TEXT);
 """
 
 
@@ -386,6 +391,28 @@ class Db:
         with self._lock:
             self._con.execute("UPDATE meldungen SET gelesen=1 WHERE id=?", (id_,))
             self._con.commit()
+
+    # ── Kalibrierung (S5: versionierte Parameter + Ablations-Evidenz) ───
+    def kalibrierung_speichern(self, ziel: str, konfiguration: str, methode: str,
+                               parameter: str, n_train: int, n_test: int,
+                               brier: float, brier_baseline: float, bss: float,
+                               meta: str = "") -> int:
+        with self._lock:
+            cur = self._con.execute(
+                "INSERT INTO kalibrierung(as_of,ziel,konfiguration,methode,parameter,"
+                "n_train,n_test,brier,brier_baseline,bss,meta) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (_jetzt(), ziel, konfiguration, methode, parameter,
+                 n_train, n_test, brier, brier_baseline, bss, meta))
+            self._con.commit()
+            return int(cur.lastrowid)
+
+    def kalibrierungen(self, ziel: str | None = None, limit: int = 20) -> list[dict]:
+        sql = ("SELECT * FROM kalibrierung"
+               + (" WHERE ziel=?" if ziel else "") + " ORDER BY id DESC LIMIT ?")
+        with self._lock:
+            zeilen = self._con.execute(sql, (ziel, limit) if ziel else (limit,)).fetchall()
+        return [dict(r) for r in zeilen]
 
     def close(self) -> None:
         with self._lock:

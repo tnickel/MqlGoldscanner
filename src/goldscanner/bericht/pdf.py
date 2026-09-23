@@ -111,13 +111,14 @@ def baue_wochen_pdf(matrix: dict, ziel: Path | None = None) -> Path:
 
     # Kopfzeilen-Tabelle je Tag
     kopf = [["Tag", "P finale", "Basis", "Klima", "Schwelle $", "Q10-Q90 $",
-             "Richtung", "Events"]]
+             "KI-Richt.", "P(hoch)", "Events"]]
     for t in matrix["tage"]:
         f = fusion_je_tag.get(t["datum"], {})
         basis = f.get("basis_pct") if f else (
             round(t["p_stat"] * 100, 1) if t.get("p_stat") is not None else
             (round(t["p_klima"] * 100, 1) if t.get("p_klima") is not None else None))
         p_finale = f.get("p_finale_pct", basis)
+        r = t.get("richtung") or {}
         kopf.append([
             f"{t['wochentag']} {t['datum'][8:10]}.{t['datum'][5:7]}.",
             f"{p_finale:.0f} %" if p_finale is not None else "–",
@@ -126,7 +127,8 @@ def baue_wochen_pdf(matrix: dict, ziel: Path | None = None) -> Path:
             f"{t['schwelle_usd']:.0f}" if t.get("schwelle_usd") else "–",
             (f"{t['q10_usd']:.0f}–{t['q90_usd']:.0f}"
              if t.get("q10_usd") is not None and t.get("q90_usd") is not None else "–"),
-            f.get("richtung", "–") or "–",
+            (f.get("richtung") or "–") if f else "–",
+            f"{r.get('p_hoch') * 100:.0f} %" if r.get("p_hoch") is not None else "–",
             str(t.get("events_count", 0)),
         ])
     tabelle = Table(kopf, hAlign="LEFT")
@@ -175,6 +177,11 @@ def baue_wochen_pdf(matrix: dict, ziel: Path | None = None) -> Path:
         story.append(Paragraph("Risiken", st["h2"]))
         for r in llm["risiken"]:
             story.append(Paragraph(f"· {_p(r)}", st["text"]))
+    marktlage = matrix.get("marktlage") or {}
+    if marktlage.get("flags"):
+        story.append(Paragraph("Marktlage (S5 — Quant-Feeds)", st["h2"]))
+        for f in marktlage["flags"]:
+            story.append(Paragraph(f"· {_p(f)}", st["text"]))
     if llm.get("verstoesse"):
         story.append(Paragraph(
             f"Band-Verstöße (automatisch abgewiesen): {len(llm['verstoesse'])}",

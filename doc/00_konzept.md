@@ -1,4 +1,4 @@
-# MqlGoldscanner — Konzept (v0.2.3, Stand 23.09.2026)
+# MqlGoldscanner — Konzept (v0.2.4, Stand 23.09.2026)
 
 Multi-Agenten-Tool, das den Goldmarkt (XAUUSD) recherchiert und für jede Kalenderwoche
 eine Übersicht erstellt. **Hauptziel: Für jeden Wochentag eine kalibrierte Aussage zu
@@ -499,7 +499,7 @@ MqlGoldscanner/
 | **2 — Statistik zuerst** ✅ | Kalender-Adapter (FF/BLS/BEA/Fed/Treasury, Hash-Snapshot-Archiv), Regeltermine, Actuals (MQL5-Exporter bereit + Nasdaq-Fallback), **Klimatologie-Baseline**, erste Wochenmatrix **rein statistisch** mit Schwellen-Tabelle — **umgesetzt 23.09.2026: Tor T2 bestanden (39,5 % auf Brokerdaten, Struktur wie Bericht)** | erste belastbare Matrix |
 | **3 — Prognosemodell** ✅ | HAR auf ln(TR) + Wochentags-Dummies, Event-Features (NFP-Proxy ×1,24 / FOMC ×1,40 gemessen), GVZ-Historie (4.276 Tage), Walk-Forward über 850 Testtage, Platt-Skalierung — **Tor T3 bestanden 23.09.2026: B_har BSS +0,161** (Brier 0,244→0,205); Matrix zeigt P_stat + Modell-Range-Band | kalibrierte Prognose |
 | **4 — LLM-Schicht** ✅ | News-RSS-Adapter (8 Quellen, Delta-Hash), Community (TradingView/Analysten/Kitco-Best-Effort), Destillation (glm-5.3-flash, JSON-validiert, Fail-Fast), **Analytiker-Fusion im ±10-pp-Band mit Pflichtbegründung** (Verstöße werden systemseitig abgewiesen + geloggt), Treiber-Wasserfall, Wochen-PDF, Postfach — **umgesetzt 23.09.2026: 246 News-Items (Delta-Prinzip), Fusion Δmax 3,0 pp ohne Verstoß, PDF 2 Seiten** | vollständig erklärte Matrix |
-| **5 — Quant-Feeds & Kalibrierung** | FRED/RealYield, COT, GLD → Klassifikator + Richtungsmodell, Isotonic-Rekalibrierung, Session-/Gap-Intraday-Update | bessere Kalibrierung + Richtung |
+| **5 — Quant-Feeds & Kalibrierung** ✅ | FRED ohne Key (DFII10/T10YIE/DGS10/DTWEXBGS/VIXCLS), CFTC Managed-Money (T+4-Veröffentlichungsregel), GLD-Tonnen (XLSX); Logit-Richtungsmodell R1→R3 mit Walk-Forward-Ablation; Platt+Isotonic(PAVA) versioniert in kalibrierung (DB v5); Asia-Range-/Gap-Session-Update auf der Tagessicht — **umgesetzt 23.09.2026, Tor T5 ehrlich NICHT bestanden**: Richtung schlägt die Ø-Aufwärtswahrrscheinlichkeit 52,4 % nicht (BSS −0.003 bis −0.010 auf 4.078 Testtagen) → Symbole als „nicht verifiziert" gekennzeichnet, keine weiteren Feed-Ausbauten fürs Richtungsmodell; Quant-Feeds bleiben als Marktlage-Infrastruktur wertvoll | Richtung (gekennzeichnet) + Marktlage |
 | **6 — Betrieb & Qualität** | Verifikations-/Backtest-Agent, Track-Record-Seite, Plumes, Scout (Google/Bing/Tavily), Daemon + Zeitplan; optional GARCH/CARR, Myfxbook-Outlook (Account), Options-Skew | messbarer, selbstkalibrierender Betrieb |
 
 ## 14. Offene Punkte (vor/nach Implementierung verifizieren)

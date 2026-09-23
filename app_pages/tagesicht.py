@@ -48,6 +48,53 @@ tag = montag + timedelta(days=auswahl)
 
 events = dedup_ereignisse(db.events_fuer_zeitraum(tag.isoformat(), tag.isoformat()))
 
+# Session-Lage (S5): Asia-Range + Gap + empirische Revision — nur für HEUTE
+if tag == heute:
+    from goldscanner.modell import session as session_modul
+    from goldscanner.klimatologie import schwelle_naechster_tag
+    h1 = db.raten_laden(settings.get("mt5_symbol", "XAUUSD"), "h1")
+    d1 = db.raten_laden(settings.get("mt5_symbol", "XAUUSD"), "d1")
+    lage = session_modul.asia_range_und_gap(h1, heute.isoformat())
+    if lage.get("ok"):
+        with st.container(border=True):
+            st.subheader("Session-Lage heute (Asia bis 08:00 MEZ)", width="content")
+            s1, s2, s3 = st.columns(3, gap="small")
+            with s1:
+                st.metric("Asia-Range", f"{lage['range_usd']:.1f} USD", border=True)
+            with s2:
+                st.metric("Letzter Kurs (08:00)",
+                          f"{lage['letzter_close']:.1f}", border=True)
+            with s3:
+                st.metric("Wochenend-Gap",
+                          "–" if lage.get("wochend_gap_usd") is None
+                          else f"{lage['wochend_gap_usd']:+.1f} USD", border=True)
+            schwelle = schwelle_naechster_tag(
+                d1, heute.weekday(), float(settings.get("matrix_k", 1.0)),
+                int(settings.get("matrix_fenster", 13)))
+            if schwelle:
+                empirie = session_modul.empirie_h1(h1, d1)
+                bedingt = session_modul.bedingte_bewegungs_p(
+                    empirie, schwelle["schwelle_usd"], lage["range_usd"])
+                if bedingt.get("ok"):
+                    delta_pp = ((bedingt["p_bedingt"] - bedingt["p_ohne_bedingung"])
+                                * 100 if bedingt.get("p_ohne_bedingung") is not None else None)
+                    st.markdown(
+                        f"Asia-Range = **{bedingt['asia_anteil_der_schwelle']:.0f} × "
+                        f"Schwelle B** ({schwelle['schwelle_usd']:.0f} USD). "
+                        f"Historisch endeten Tage mit ähnlicher Asia-Range zu "
+                        f"**{bedingt['p_bedingt'] * 100:.0f} %** als Bewegungstag "
+                        f"(n={bedingt['n_bucket']} von {bedingt['n_gesamt']} Tagen; "
+                        f"ohne Bedingung: {bedingt['p_ohne_bedingung'] * 100:.0f} %"
+                        + (f", Delta {delta_pp:+.0f} pp" if delta_pp is not None else "")
+                        + ").")
+                else:
+                    st.caption(f"Schwelle B: {schwelle['schwelle_usd']:.0f} USD — "
+                               "für diese Asia-Range gibt es noch zu wenige "
+                               "historische Vergleichstage.")
+            st.caption("Rein empirisch aus der eigenen H1-Historie (~200 Tage) — "
+                       "kein Modell, großes Konfidenzintervall, als Intraday-"
+                       "Frühindiktor zu lesen.")
+
 links, rechts = st.columns([1.5, 1], gap="medium")
 
 with links:

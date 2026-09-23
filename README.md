@@ -26,7 +26,7 @@ Dashboard, Gold-Akzente). Statistik zuerst, LLM gewichtet erklärt.
   getestete Whitelist); ein laufendes Terminal wird nie beendet. Ehrlicher
   User-Agent, keine Bot-Schutz-Umgehung, höfliche Abrufabstände.
 
-## Stand (Stufe 4 von 7 — 23.09.2026)
+## Stand (Stufe 5 von 7 — 23.09.2026)
 
 | ✅ | Baustein |
 |---|---|
@@ -43,6 +43,11 @@ Dashboard, Gold-Akzente). Statistik zuerst, LLM gewichtet erklärt.
 | ✅ | **Community-Adapter (S4)**: TradingView-Ideas (Long/Short-Zählung + Level-Cluster), Analysten-Sentiment, Kitco-Survey (Best-Effort), Retail-Kontra-Flag ab 70 % Einseitigkeit |
 | ✅ | **Destillations- + Analytiker-Agent (S4)**: glm-5.3-flash destilliert News/Community zu belegten Treibern; glm-5.3 fusioniert P_stat + Events + Destillate im konfigurierbaren ±pp-Band mit Pflichtbegründung — Band-Verstöße werden systemseitig abgewiesen und geloggt; ungültige Antworten werden nie gespeichert (JSON-Validierung, Fail-Fast nach 3 Fehlern) |
 | ✅ | **Treiber-Wasserfall je Tag** im Dashboard + **Wochen-PDF** (reportlab) + Postfach für Prognoseänderungen |
+| ✅ | **Quant-Feeds (S5)**: FRED ohne Key (Realzins/Inflations-/Nominalzins/Dollar/VIX), CFTC Managed-Money-Netto (Veröffentlichungsverzug sauber behandelt), GLD-Bestände in Tonnen — alles point-in-time in quant_series |
+| ✅ | **Richtungsmodell (S5)**: Logit P(Close > Vortag) mit Walk-Forward-Ablation (Trend → +Makro → +Positionierung); **ehrlich: schlägt die Ø-Rate nicht** → Symbole als „nicht verifiziert" gekennzeichnet |
+| ✅ | **Marktlage-Sektion**: ΔRealzins/ΔDollar 5T, COT-Netto mit Perzentil, GLD-Δ, Crowding-Flags — im Dashboard und PDF |
+| ✅ | **Nachkalibrierung**: Platt sofort, Isotonic (PAVA) ab 500 Beobachtungen, versioniert in der DB |
+| ✅ | **Session-/Gap-Agent**: Asia-Range bis 08:00 MEZ + Wochenend-Gap, empirische bedingte Bewegungs-P auf der Tagessicht |
 | ✅ | **Tagessicht**: Event-Zeitleiste (Europe/Berlin) mit Gold-Relevanz-Klassen und Dedup über Quellen |
 | ✅ | MQL5-Kalender-Exporter (`mql5/CalendarExport.mq5`) für Ist-Werte + Nasdaq-Fallback |
 | ✅ | Quellen-Launch-Check: 16 verifizierte Kern-URLs mit Typ-/Signaturprüfung |
@@ -64,8 +69,19 @@ Ideen — die Fusion bewegte die Modellwahrscheinlichkeiten dezent und begründe
 (LLM-Delta bringt messbaren Nutzen?) wird über die kommenden Wochen im Track-Record
 gemessen — bis dahin bleibt das Band konfigurierbar (Einstellungen → GLM).
 
-**Roadmap** (`doc/02_stufenplan.md`): S5 Richtung & Quant-Feeds (COT, FRED,
-Isotonic-Kalibrierung) → S6 Daemon & Track-Record (inkl. Tor-T4-Auswertung) → S7 Ausbau.
+**S5 (23.09.2026) — das ehrliche Tor-Ergebnis:** Das Richtungsmodell wurde mit
+sauberer Ablation auf **4.078 Testtagen (17 Jahre Broker-Historie)** geprüft und
+schlägt die Ø-Aufwärtswahrscheinlichkeit (52,4 %) **nicht** (BSS −0,003 bis −0,010).
+Die tägliche Richtung von Gold ist mit Trend-, Makro- und Positionierungs-Features
+nicht vorhersagbar — deshalb sind die Richtungssymbole klar als „nicht verifiziert"
+gekennzeichnet und es gibt keine weiteren Feed-Ausbauten fürs Richtungsmodell.
+Der Nutzen der S5-Feeds liegt in der **Marktlage** (ΔRealzins, ΔDollar, COT-Perzentil,
+GLD-Flüsse, Crowding-Flags), die Dashboard, PDF und dem Analytiker-Agent Kontext
+gibt. Nebenbei: Auf 17 Jahren gewinnt im Bewegungs-Backtest die Event+IV-Konfiguration
+(har_D, BSS +0,067) — Tor T3 bleibt bestanden.
+
+**Roadmap** (`doc/02_stufenplan.md`): S6 Betrieb & Track-Record (Daemon,
+Verifikations-Agent inkl. Tor-T4-Auswertung, URL-Scout, MT5-Export) → S7 Ausbau.
 
 ## Schnellstart
 
@@ -96,7 +112,7 @@ src/goldscanner/
   ├─ kennzahlen.py                TR/ATR/RSI/SMA — reiner Code, Ankertests
   ├─ klimatologie.py              Basisrate je Wochentag (Shrinkage), Schwelle B
   ├─ modell/                      HAR-Features/OLS/Backtest/Event-Multiplikatoren/GVZ
-  ├─ adapter/                     Kalender, News-RSS, Community (Deterministisch vorverdaut)
+  ├─ adapter/                     Kalender, News-RSS, Community, Quant-Feeds (FRED/CFTC/GLD)
   ├─ agenten/                     Destillation + Analytiker-Fusion (Band-Disziplin)
   ├─ llm/                         GLM-Client + Prompt-Vorlagen (config/prompts/*.md)
   ├─ bericht/                     Wochen-PDF (reportlab)
