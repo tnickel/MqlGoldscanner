@@ -1,4 +1,4 @@
-# MqlGoldscanner — Konzept (v0.2.1, Stand 23.09.2026)
+# MqlGoldscanner — Konzept (v0.2.2, Stand 23.09.2026)
 
 Multi-Agenten-Tool, das den Goldmarkt (XAUUSD) recherchiert und für jede Kalenderwoche
 eine Übersicht erstellt. **Hauptziel: Für jeden Wochentag eine kalibrierte Aussage zu
@@ -9,7 +9,7 @@ eine Übersicht erstellt. **Hauptziel: Für jeden Wochentag eine kalibrierte Aus
 Grundlagen:
 - Vorbild `D:\git\MQL\MqlKiScanner` — und seit dem 23.09.2026 auch **gleiche Technik**:
   **Python/Streamlit** (Nutzer-Entscheidung nach UI-Vergleich; der Java/JavaFX-Prototyp
-  liegt vollständig in `archiv/java-prototyp/`). Design (`ui_design.py`-Port mit
+  wurde auf Nutzer-Wunsch komplett entfernt). Design (`ui_design.py`-Port mit
   Gold-Akzenten, Radar-Grid, Stepper), GLM-Client, Lock, Secrets und MT5-Zugang sind
   direkt aus dem KiScanner portiert; `MetaTrader5` ist Python-nativ (keine Bridge mehr).
 - Deep-Research-Berichte 23.09.2026 in `doc/DeepResaearch/` (Astra = live-getestete
@@ -497,16 +497,20 @@ MqlGoldscanner/
 |---|---|---|
 | **1 — Gerüst & Kurse** ✅ | Streamlit-App (8 Bereiche, KiScanner-Design in Gold), Config+Secrets+SQLite, GlmClient m. Fehler-Taxonomie+Budget, MT5 nativ (Kurse D1/H4/H1), Plotly-Candlestick-Chart, Quellen-Launch-Check — **umgesetzt am 23.09.2026 (Python-Neubau nach Nutzer-Entscheidung)** | App läuft, Kurse sichtbar |
 | **2 — Statistik zuerst** ✅ | Kalender-Adapter (FF/BLS/BEA/Fed/Treasury, Hash-Snapshot-Archiv), Regeltermine, Actuals (MQL5-Exporter bereit + Nasdaq-Fallback), **Klimatologie-Baseline**, erste Wochenmatrix **rein statistisch** mit Schwellen-Tabelle — **umgesetzt 23.09.2026: Tor T2 bestanden (39,5 % auf Brokerdaten, Struktur wie Bericht)** | erste belastbare Matrix |
-| **3 — LLM-Schicht** | News-/Community-Destillation, Analytiker-Fusion mit Band + Treiber-Wasserfall, Reporter/PDF, Journal | vollständig erklärte Matrix |
-| **4 — Quant-Feeds & Kalibrierung** | GVZ/iv30, FRED/RealYield, COT, GLD → Klassifikator + Richtungsmodell, Isotonic-Rekalibrierung, Session-/Gap-Intraday-Update | bessere Kalibrierung + Richtung |
-| **5 — Betrieb & Qualität** | Verifikations-/Backtest-Agent, Track-Record-Seite, Plumes, Scout (Google/Bing/Tavily), Daemon + Zeitplan; optional GARCH/CARR, Myfxbook-Outlook (Account), Options-Skew | messbarer, selbstkalibrierender Betrieb |
+| **3 — Prognosemodell** ✅ | HAR auf ln(TR) + Wochentags-Dummies, Event-Features (NFP-Proxy ×1,24 / FOMC ×1,40 gemessen), GVZ-Historie (4.276 Tage), Walk-Forward über 850 Testtage, Platt-Skalierung — **Tor T3 bestanden 23.09.2026: B_har BSS +0,161** (Brier 0,244→0,205); Matrix zeigt P_stat + Modell-Range-Band | kalibrierte Prognose |
+| **4 — LLM-Schicht** | News-/Community-Destillation, Analytiker-Fusion mit Band + Treiber-Wasserfall, Reporter/PDF, Journal | vollständig erklärte Matrix |
+| **5 — Quant-Feeds & Kalibrierung** | FRED/RealYield, COT, GLD → Klassifikator + Richtungsmodell, Isotonic-Rekalibrierung, Session-/Gap-Intraday-Update | bessere Kalibrierung + Richtung |
+| **6 — Betrieb & Qualität** | Verifikations-/Backtest-Agent, Track-Record-Seite, Plumes, Scout (Google/Bing/Tavily), Daemon + Zeitplan; optional GARCH/CARR, Myfxbook-Outlook (Account), Options-Skew | messbarer, selbstkalibrierender Betrieb |
 
 ## 14. Offene Punkte (vor/nach Implementierung verifizieren)
 
 1. FF-Rate-Limit „~2 Requests/5 min" ist nur Community-Aussage → konservativ 4×/Tag.
 2. MT5-Kalenderexport live testen (Abdeckung Actuals/Forecast beim eigenen Broker).
-3. BLS-ICS bei uns erneut testen (Astra: 403; Opus: 200 — vermutlich UA-abhängig).
-4. Klimatologie-Zahlen mit MT5-XAUUSD wiederholen (Opus nutzte GC=F).
+3. ~~BLS-ICS bei uns erneut testen~~ ✅ geklärt 23.09.2026: 403 nur ohne Kontakt-Adresse
+   im User-Agent; mit `+mailto:` → 200 (BLS-Adapter läuft grün).
+4. ~~Klimatologie-Zahlen mit MT5-XAUUSD wiederholen~~ ✅ 23.09.2026: 1.001 Broker-Tage
+   (Tickmill XAUUSD, k=1,0) → Basisrate gesamt 41,2 % statt 43,0 % (GC=F) — Struktur
+   gleich (Mi am höchsten); Differenz passt zu Broker-/Roll-Definition. Tor T2 passt.
 5. FXStreet-Forecast-Poll-Struktur parsen; CNBC-Gold-RSS-ID klären.
 6. Cboe-CDN-Nutzungsbedingungen (verzögerte Daten, private Nutzung) und LBMA-Lizenz.
 7. Smile-vs-eigene-Implementierung für GBM entscheiden (Java-21-Kompatibilität 4.x).

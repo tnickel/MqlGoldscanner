@@ -20,24 +20,26 @@ from goldscanner.wochenlauf import starten as wochenlauf_starten
 from goldscanner.wochenmatrix import baue_matrix
 
 page_header(
-    "Stufe 2 · Klimatologie-Matrix",
+    "Stufe 2/3 · Klimatologie + HAR-Modell",
     "Gold-Bewegungswahrscheinlichkeit je Wochentag",
     "Hauptziel: pro Tag **Wahrscheinlichkeit**, **erwartete Range** und (ab S5) "
-    "**Richtung**. Diese Matrix ist rein statistisch — Basisrate je Wochentag mit "
-    "Shrinkage, Schwelle B aus den letzten 13 Wochen desselben Wochentags "
-    "(point-in-time, kein Look-ahead). Kalibriert wird ab Stufe 3 (BSS gegen die "
-    "Basisrate ~43 %).",
+    "**Richtung**. Die Matrix zeigt P_stat aus dem HAR-Modell (HAR-Lags + Events + "
+    "GVZ) neben der Klimatologie-Basisrate; Schwelle B aus den letzten 13 Wochen "
+    "desselben Wochentags (point-in-time, kein Look-ahead). Tor T3: nur Modelle mit "
+    "BSS > 0 gegen die Basisrate kommen auf die Matrix.",
 )
 
 zeige_stepper([
     {"nr": 1, "title": "Gerüst & Kurse", "status": "complete", "meta": "App · MT5 · GLM"},
     {"nr": 2, "title": "Klimatologie-Matrix", "status": "complete", "meta": "Kalender · Basisrate"},
-    {"nr": 3, "title": "Kalibriertes Modell", "status": "pending", "meta": "HAR · Events · iv30"},
+    {"nr": 3, "title": "Kalibriertes Modell", "status": "complete" if (
+        st.session_state.get("matrix") or {}).get("modell_info", {}).get("tor_t3_bestanden")
+        else "pending", "meta": "HAR · Events · GVZ"},
     {"nr": 4, "title": "LLM-Erklärungen", "status": "pending", "meta": "Treiber · Begründung · PDF"},
     {"nr": 5, "title": "Richtung & Quant", "status": "pending", "meta": "P(hoch) · COT · FRED"},
     {"nr": 6, "title": "Betrieb & Track-Record", "status": "pending", "meta": "Daemon · BSS · Scout"},
     {"nr": 7, "title": "Ausbau", "status": "pending", "meta": "optional"},
-], overall=2 / 7)
+], overall=3 / 7)
 
 settings = config.load_settings()
 
@@ -92,19 +94,24 @@ if matrix:
 
     _WARNFARBEN = {"ruhig": "#38BDF8", "normal": "#94A3B8", "erhöht": "#E8B84B",
                    "hoch": "#FB923C", "extrem": "#F43F5E"}
+    modell_info = matrix.get("modell_info") or {}
     spalten = st.columns(5, gap="small")
     for spalte, tag in zip(spalten, matrix["tage"]):
         with spalte:
             with st.container(border=True):
                 d = datetime.fromisoformat(tag["datum"])
                 st.markdown(f"**{tag['wochentag']}** · {d.strftime('%d.%m.')}")
-                p = tag["p"]
+                p = tag["p_stat"] if tag.get("p_stat") is not None else tag["p"]
+                p_klima = tag.get("p_klima")
+                delta = (p - p_klima) if (p is not None and p_klima is not None) else None
                 st.metric("P(Bewegung)", "–" if p is None else f"{p * 100:.0f} %",
-                          None if tag["delta_zu_basis"] is None
-                          else f"{tag['delta_zu_basis'] * 100:+.0f} pp",
+                          None if delta is None else f"{delta * 100:+.0f} pp vs. Klima",
                           border=True, label_visibility="collapsed")
                 if p is not None:
                     st.progress(min(p, 1.0))
+                if p_klima is not None and p is not None:
+                    st.caption(f"Klimatologie: {p_klima * 100:.0f} %"
+                               + (" · Modell" if tag.get("p_stat") is not None else ""))
                 farbe = _WARNFARBEN.get(tag["warnstufe"], "#94A3B8")
                 st.markdown(f'<span style="color:{farbe};font-weight:700">'
                             f'● {tag["warnstufe"].upper()}</span>',
@@ -130,6 +137,39 @@ if matrix:
         st.caption("1,0× = Bewegungstag-Definition · 1,5×/2,0× zeigen das "
                    "Extremrisiko (USGS-Vorbild). n = bewertete Tage je Wochentag "
                    "nach Aufwärmphase.")
+
+    if modell_info:
+        with st.expander(f"Backtest · Tor T3 — {
+            'BESTANDEN' if modell_info['tor_t3_bestanden'] else 'NICHT bestanden'} "
+                         f"(BSS {modell_info['bss']:+.3f}, n={modell_info['n_test']})"):
+            if modell_info["tor_t3_bestanden"]:
+                st.success(f"**Tor T3 bestanden:** Konfiguration "
+                           f"`{modell_info['konfiguration']}` schlägt die Klimatologie im "
+                           f"Walk-Forward (BSS {modell_info['bss']:+.3f} = "
+                           f"{modell_info['bss'] * 100:.1f} % weniger Brier-Fehler). "
+                           "Die Matrix zeigt P_stat aus dem Modell.")
+            else:
+                st.warning("**Tor T3 nicht bestanden:** Keine Konfiguration schlägt die "
+                           "Klimatologie stabil — die Matrix bleibt auf der Basisrate "
+                           "(ehrlich statt Rauschen zu erklären). Features iterieren "
+                           "(mehr Historie, echte Event-Historie über CalendarExport.mq5).")
+            bt = pd.DataFrame(modell_info["backtest_ergebnisse"]).rename(columns={
+                "konfiguration": "Konfiguration", "n": "n Test",
+                "brier": "Brier", "bss": "BSS vs. Klima", "logloss": "Log-Loss",
+                "bss_platt_2haelfte": "BSS (Platt, 2. Hälfte)"})
+            st.dataframe(bt, hide_index=True, width="stretch")
+            st.caption("Walk-Forward expanding window: Training nur mit Tagen VOR dem "
+                       "Testtag. A = Klimatologie (Referenz), B = +HAR, C = +Events, "
+                       "D = +GVZ. Platt = Nachkalibrierung auf der 1. OOS-Hälfte, "
+                       "bewertet auf der 2.")
+            mult = pd.DataFrame(modell_info["multiplikatoren"]).rename(columns={
+                "event": "Event", "n": "n", "multiplikator": "Ø-TR-Multiplikator",
+                "p_bewegung_event": "P(Bewegung|Event)", "p_bewegung_normal":
+                "P(Bewegung|normal)", "lift_pp": "Lift (pp)"})
+            if not mult.empty:
+                st.markdown("**Gemessene Event-Multiplikatoren** (historisch, "
+                            "NFP = erster-Freitag-Proxy, FOMC aus Fed-Historie):")
+                st.dataframe(mult, hide_index=True, width="stretch")
 else:
     st.info("Noch keine Matrix in dieser Sitzung. **„Wochenlauf starten“** holt Kurse "
             "und Kalender (ForexFactory, BLS, BEA, Fed, Treasury, Regeltermine) und "

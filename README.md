@@ -26,7 +26,7 @@ Dashboard, Gold-Akzente). Statistik zuerst, LLM gewichtet erklärt.
   getestete Whitelist); ein laufendes Terminal wird nie beendet. Ehrlicher
   User-Agent, keine Bot-Schutz-Umgehung, höfliche Abrufabstände.
 
-## Stand (Stufe 2 von 7 — 23.09.2026)
+## Stand (Stufe 3 von 7 — 23.09.2026)
 
 | ✅ | Baustein |
 |---|---|
@@ -34,20 +34,30 @@ Dashboard, Gold-Akzente). Statistik zuerst, LLM gewichtet erklärt.
 | ✅ | MetaTrader-5-Anbindung nativ (D1/H4/H1, Whitelist, nur lesend) |
 | ✅ | Plotly-Candlestick-Chart mit SMA 10/50/200 + Kennzahlen-Panel (ATR/RSI/TR Wilder) |
 | ✅ | GLM-Client mit Fehler-Taxonomie (1113/429·1302/finish_reason), Lauf- und Tagesbudget |
-| ✅ | **Wochenmatrix (Klimatologie)**: P(Bewegungstag) je Wochentag mit Shrinkage, Schwelle B, Range-Band Q10–Q90, Warnstufen, Schwellen-Tabelle (1,0×/1,5×/2,0×) |
+| ✅ | **Wochenmatrix**: P(Bewegungstag) je Wochentag — Klimatologie mit Shrinkage UND P_stat aus dem HAR-Modell mit Delta-Anzeige, Schwelle B, Modell-Range-Band Q10–Q90, Warnstufen, Schwellen-Tabelle (1,0×/1,5×/2,0×) |
 | ✅ | **Kalender-Adapter**: ForexFactory, BLS, BEA, Fed, TreasuryDirect + regelbasierte Termine (GC FND/LTD/Opex, Feiertage, DST) — Hash-Snapshot-Archiv (point-in-time) |
+| ✅ | **HAR-Prognosemodell** auf ln(TR/Close): HAR-Lags + Wochentags-Dummies, Walk-Forward-Rücktest (Brier/BSS/Log-Loss/Reliability, Platt-Skalierung), Tor-T3-Ampel im Dashboard |
+| ✅ | **Event-Multiplikatoren** aus Brokerdaten: NFP ×1,24 · FOMC ×1,40 · GC-Termin ×1,10 |
+| ✅ | **GVZ-Historie** (CBOE Gold Volatility Index, 4.276 Tage seit 2009) als IV-Feature |
 | ✅ | **Tagessicht**: Event-Zeitleiste (Europe/Berlin) mit Gold-Relevanz-Klassen und Dedup über Quellen |
 | ✅ | MQL5-Kalender-Exporter (`mql5/CalendarExport.mq5`) für Ist-Werte + Nasdaq-Fallback |
 | ✅ | Quellen-Launch-Check: 16 verifizierte Kern-URLs mit Typ-/Signaturprüfung |
 | ✅ | SQLite (versioniert), Audit-Journal, Prognose-Versionen (as_of) |
-| ✅ | 37 pytest-Ankertests (u. a. Klimatologie- und Regeltermin-Anker, Kalender-Parsing) |
+| ✅ | 48 pytest-Ankertests (u. a. HAR-Parameter-Recovery, Brier/BSS-Anker, Kalibrierung, Kalender-Parsing, Kein-Look-ahead) |
 
-**Tor T2 bestanden:** eigene Klimatologie auf Brokerdaten = 39,5 % Bewegungstage
-(Bericht: ~43 % auf Futures) bei identischer Wochentags-Struktur (Mittwoch höchste Rate).
+**Tor T2 bestanden:** eigene Klimatologie auf Brokerdaten (1.001 Tage Tickmill XAUUSD)
+= 41,2 % Bewegungstage (Bericht: ~43 % auf Futures) bei identischer Wochentags-Struktur
+(Mittwoch höchste Rate).
 
-**Roadmap** (`doc/02_stufenplan.md`): S3 HAR-Prognosemodell mit Walk-forward
-(BSS gegen die Basisrate) → S4 LLM-Destillation/Fusion → S5 Richtung & Quant-Feeds
-(GVZ/iv30, COT, FRED) → S6 Daemon & Track-Record → S7 Ausbau.
+**Tor T3 bestanden (23.09.2026):** HAR-Modell schlägt die wochentagsbewusste Klimatologie
+im Walk-Forward über 850 Testtage mit **BSS +0,161** (Brier 0,244 → 0,205). Damit ist der
+Weg für die LLM-Erklärungsschicht (S4) frei. Ehrlich dokumentiert: Platt-Skalierung bringt
+out-of-sample noch ≈ 0 (Kanten-Kalibrierung → S5), und Events/IV als zusätzliche
+Regressoren (C/D) lagen leicht unter der schlanken B-Variante.
+
+**Roadmap** (`doc/02_stufenplan.md`): S4 LLM-Destillation/Fusion (Analytiker-Band ±10 pp)
+→ S5 Richtung & Quant-Feeds (COT, FRED, Isotonic-Kalibrierung) → S6 Daemon & Track-Record
+→ S7 Ausbau.
 
 ## Schnellstart
 
@@ -76,6 +86,9 @@ src/goldscanner/
   ├─ llm/client.py                GLM-Client, Fehler-Taxonomie, Budgets
   ├─ mt5/kurse.py                 MT5 read-only (nativ, Whitelist-geprüft)
   ├─ kennzahlen.py                TR/ATR/RSI/SMA — reiner Code, Ankertests
+  ├─ klimatologie.py              Basisrate je Wochentag (Shrinkage), Schwelle B
+  ├─ modell/                      HAR-Features/OLS/Backtest/Event-Multiplikatoren/GVZ
+  ├─ wochenmatrix.py + wochenlauf.py   Matrix-Bau + gesteuerte Pipeline
   ├─ quellen_check.py             Wächter: Status + Content-Type + Signatur
   ├─ db.py / lock.py / config.py  SQLite, Lauf-Lock, Einstellungen
 tests/                            pytest

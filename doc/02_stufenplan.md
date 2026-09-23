@@ -1,15 +1,22 @@
-# MqlGoldscanner — Stufenplan (v1.2, 23.09.2026)
+# MqlGoldscanner — Stufenplan (v1.3, 23.09.2026)
 
 > **Technologie-Wechsel 23.09.2026:** Nach Nutzer-Entscheidung läuft die Umsetzung auf
-> **Python/Streamlit** (wie der MqlKiScanner), nicht mehr Java/JavaFX. **S1 und S2 sind
-> in Python fertig abgenommen** (S2: 37 pytest grün, Live-Wochenlauf über alle
-> Kalender-Quellen, Tor T2 bestanden — eigene Klimatologie 39,5 % vs. ~43 % aus dem
-> Bericht bei identischer Wochentags-Struktur, UI im Browser visuell verifiziert).
+> **Python/Streamlit** (wie der MqlKiScanner), nicht mehr Java/JavaFX. **S1, S2 und S3
+> sind in Python fertig abgenommen** (S2: Tor T2 bestanden — eigene Klimatologie,
+> Abnahme-Wert 39,5 %; mit voller Historie (1.001 Tage) 41,2 % auf 970 Bewegungstagen
+> vs. ~43 % aus
+> dem Bericht bei identischer Wochentags-Struktur; UI im Browser visuell verifiziert).
 > Die Java-Inhalte der Stufenbeschreibungen unten sind historisch zu lesen.
 >
-> **Bekannt aus S2:** BLS liefert HTTP 403, wenn der User-Agent KEINE Kontakt-Adresse
-> enthält (verifiziert: mit Suffix 200, ohne 403) → Einstellungen → Netz → Kontakt
-> eintragen. Bis dahin liefert ForexFactory die NFP/CPI-Zeiten identisch.
+> **S3 abgenommen 23.09.2026 (Tor T3 BESTANDEN):** HAR auf ln(TR_rel) mit Walk-Forward
+> über 850 Testtage (Refit alle 5 Tage, expanding, MIN_TRAIN=120): **B_har BSS +0,161**
+> (Brier 0,2437 → 0,2046, Log-Loss 0,681 → 0,596) gegen die wochentagsbewusste
+> Klimatologie. Event-Multiplikatoren aus 1.001 Broker-Tagen: NFP ×1,24 (+10,5 pp
+> Bewegungswahrscheinlichkeit), FOMC ×1,40 (+9,4 pp), GC-Termin ×1,10 (neutral).
+> 48 pytest grün. Ehrliche Einschränkung: Platt-Skalierung bringt OOS ≈ 0 — die
+> Kanten sind noch nicht perfekt kalibriert (S5-Thema, Isotonic ab ~500 Beobachtungen);
+> C/D (Events/IV als Regressoren) lagen OOS leicht unter B — dokumentiert, Matrix
+> läuft bewusst mit B_har. Kein Look-ahead: Features nur bis t−1, point-in-time-Tests.
 
 Verfeinerung von §13 des Konzepts (`doc/00_konzept.md`). Ziel: Umsetzung in **7 Stufen**,
 die jeweils für sich abgeschlossen, testbar und **nutzbar** sind — die App bleibt nach

@@ -13,7 +13,7 @@ from pathlib import Path
 
 from . import config
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
@@ -49,6 +49,9 @@ CREATE INDEX IF NOT EXISTS idx_events_datum ON calendar_events(datum);
 CREATE TABLE IF NOT EXISTS prognose_versionen (
     id INTEGER PRIMARY KEY AUTOINCREMENT, as_of TEXT NOT NULL,
     woche TEXT NOT NULL, modell TEXT NOT NULL, inhalt TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS quant_series (
+    tag TEXT NOT NULL, schluessel TEXT NOT NULL, wert REAL NOT NULL,
+    PRIMARY KEY (tag, schluessel));
 """
 
 
@@ -68,7 +71,12 @@ class Db:
         with self._lock:
             self._con.executescript("PRAGMA journal_mode=WAL;")
             self._con.executescript(_SCHEMA)
-            if self._con.execute("SELECT COUNT(*) FROM schema_version").fetchone()[0] == 0:
+            version = self._con.execute("SELECT MAX(version) FROM schema_version").fetchone()[0]
+            if version is None:
+                self._con.execute("INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,))
+            elif version < SCHEMA_VERSION:
+                # CREATE IF NOT EXISTS hat bereits neue Tabellen angelegt —
+                # hier nur die Versionsnummer nachziehen (zustandslose Migration).
                 self._con.execute("INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,))
             self._con.commit()
 
@@ -233,6 +241,24 @@ class Db:
                             (actuals[schluessel], z["id"]))
             self._con.commit()
             return geaendert
+
+    # ── Quant-Serien (GVZ/iv30/FRED …) ──────────────────────────────────
+    def quant_speichern(self, schluessel: str, werte: dict[str, float]) -> int:
+        """Upsert Tageswerte (tag → wert). Rückgabe: Anzahl Zeilen."""
+        with self._lock:
+            self._con.executemany(
+                "INSERT INTO quant_series(tag,schluessel,wert) VALUES (?,?,?) "
+                "ON CONFLICT(tag,schluessel) DO UPDATE SET wert=excluded.wert",
+                [(tag, schluessel, float(w)) for tag, w in werte.items()])
+            self._con.commit()
+            return len(werte)
+
+    def quant_laden(self, schluessel: str) -> dict[str, float]:
+        with self._lock:
+            zeilen = self._con.execute(
+                "SELECT tag, wert FROM quant_series WHERE schluessel=? ORDER BY tag",
+                (schluessel,)).fetchall()
+        return {r["tag"]: r["wert"] for r in zeilen}
 
     # ── Prognose-Versionen (as_of, kein Look-ahead) ─────────────────────
     def prognose_speichern(self, woche: str, modell: str, inhalt: str) -> int:
