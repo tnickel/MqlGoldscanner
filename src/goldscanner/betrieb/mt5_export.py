@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """MT5-Export (S6): Prognosen als CSV für eigene EAs.
 
 Ziel: der Common-Files-Ordner (FILE_COMMON) aller MT5-Terminals — dort kann

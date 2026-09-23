@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Tagessicht — Event-Zeitleiste eines Wochentags + Klimatologie-Karte (S2)."""
 from __future__ import annotations
 

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Wochen-PDF (S4): die erklärte Matrix als Bericht.
 
 Deterministische renderer — das LLM liefert nur Textbausteine, alle Zahlen

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Track-Record (S6): Prognosequalität messbar — Prognose vs. Realität.
 
 Datenbasis: verifikationen-Tabelle (der Verifikations-Agent vergleicht je
@@ -8,7 +7,6 @@ füllt sich automatisch — jede Woche wächst n.
 from __future__ import annotations
 
 import sys
-from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]

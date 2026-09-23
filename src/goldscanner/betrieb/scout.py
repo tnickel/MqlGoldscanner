@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """URL-Scout (S6): neue Gold-Quellen entdecken — deterministisch, ohne LLM.
 
 Der Scout liest den Google-News-RSS (der deckt praktisch alle Publisher ab)
@@ -20,8 +19,6 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
-
-import requests
 
 from .. import config
 from ..adapter.news import gold_relevanz, _hole_feed

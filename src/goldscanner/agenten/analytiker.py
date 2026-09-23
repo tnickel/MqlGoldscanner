@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Analytiker-Fusion (S4): P_stat (HAR) + Events + Destillate → P_finale.
 
 Band-Disziplin (Konzept §6, Tor T4): Das LLM darf die Modellwahrschein-

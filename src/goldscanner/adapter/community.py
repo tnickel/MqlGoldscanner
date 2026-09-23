@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Community-Adapter (S4, Konzept §7.3): Chart-Community-Konsens.
 
 Deterministische Vorverarbeitung (das LLM destilliert nur, rechnet nie):
@@ -151,7 +150,7 @@ def sammle_community(settings: dict) -> dict:
                                             "fehler": f"{type(exc).__name__}: {exc}"}
     try:
         ergebnis["quellen"]["kitco"] = kitco_survey(settings)
-    except Exception as exc:
+    except Exception:
         ergebnis["quellen"]["kitco"] = None
 
     tv = ergebnis["quellen"]["tradingview"]

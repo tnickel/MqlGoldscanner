@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Prozessweite Singletons für die Streamlit-Seiten (cache_resource).
 
 Seiten importieren NIE streamlit_app (das würde die App-Shell re-ausführen) —

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """GLM-Client-Fehler-Taxonomie mit Fake-Requests (kein Netz, kein echter Key)."""
 import sys
 from pathlib import Path

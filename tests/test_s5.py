@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Stufe-5-Tests: Quant-Parser (FRED/COT/GLD), COT-Veröffentlichungsverzug,
 Logit-Parameter-Recovery, Isotonic/PAVA, Session-Empirie, DB v5."""
 from __future__ import annotations

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Stufe-7-Tests: Wochen-Summenwert, Was-wäre-wenn-Simulation, REST-API."""
 from __future__ import annotations
 
@@ -123,7 +122,7 @@ def test_rest_matrix_und_csv(rest_server, tmp_path):
     # unbekannter Pfad → 404
     try:
         _get(rest_server.port, "/gibtsnicht")
-        assert False, "404 erwartet"
+        pytest.fail("404 erwartet")
     except urllib.error.HTTPError as exc:
         assert exc.code == 404
 

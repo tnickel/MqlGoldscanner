@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Quellen-Launch-Check (Stufe 1): Erreichbarkeit der geplanten Kern-URLs
 (Konzept §7) mit dem EHRLICHEN User-Agent — der erste Wächter-Baustein.
 

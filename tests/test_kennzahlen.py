@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Ankertests für Kennzahlen — handgerechnete Werte (portiert aus dem
 Java-Prototyp, dort bereits grün)."""
 import sys

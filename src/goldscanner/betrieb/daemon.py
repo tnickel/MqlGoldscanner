@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Daemon (S6): läuft getrennt von der UI und fährt den Rhythmus aus
 Konzept §10 — Herzschlag in die DB, Merker gegen Wiederholung, Lock gegen
 GUI-Doppelläufe, kooperativer Stopp über eine Stop-Datei.
@@ -135,7 +134,6 @@ def hauptschleife() -> None:
     if STOP_DATEI.exists():
         STOP_DATEI.unlink()
     db = Db()
-    settings = config.load_settings()
     _log("Daemon gestartet (PID "
          f"{os.getpid()}), Zeitplan: {', '.join(ZEITPLAN)}")
     db.daemon_status_schreiben("daemon", True, "gestartet")
@@ -200,7 +198,9 @@ def starte_detached() -> bool:
         creationflags = (subprocess.DETACHED_PROCESS
                          | subprocess.CREATE_NEW_PROCESS_GROUP
                          | subprocess.CREATE_NO_WINDOW)
-    log = open(LOG_DATEI, "a", encoding="utf-8")
+    # Handle bewusst OHNE with: der Daemon-Prozess erbt ihn und schreibt
+    # weiter, das Elternteil gibt ihn nach dem Popen ab (kein Leak).
+    log = open(LOG_DATEI, "a", encoding="utf-8")  # noqa: SIM115
     subprocess.Popen(
         [sys.executable, "-m", "goldscanner.betrieb.daemon"],
         cwd=str(config.SRC), stdout=log, stderr=log,

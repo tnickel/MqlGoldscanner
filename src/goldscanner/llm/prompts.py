@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Prompt-Vorlagen (S4): externe MD-Dateien in config/prompts/.
 
 Vorteil: Prompts sind editierbar, versioniert und geprüft — ohne Code.

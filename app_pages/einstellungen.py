@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Einstellungen — MT5/GLM/Netz (Vorbild: KiScanner admin.py, Stufe-1-Umfang)."""
 from __future__ import annotations
 
@@ -11,7 +10,6 @@ sys.path.insert(0, str(ROOT / "src"))
 import streamlit as st
 
 from goldscanner import config, secrets_store
-from goldscanner.app_state import hole_db
 from goldscanner.mt5 import kurse
 from goldscanner.ui_design import aktivitaets_banner, page_header
 

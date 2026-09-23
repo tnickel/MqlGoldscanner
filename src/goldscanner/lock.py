@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Prozessübergreifendes Lauf-Lock (Port des KiScanner agenten/lock.py).
 
 Datei-basiert mit PID und Zeitstempel: ein Lock ohne lebenden Halter oder

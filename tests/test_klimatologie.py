@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Ankertests für die Klimatologie — synthetische Reihen mit bekanntem Ergebnis."""
 import sys
 from datetime import datetime, timedelta, timezone

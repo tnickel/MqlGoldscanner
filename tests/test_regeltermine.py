@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Ankertests für Regeltermine — handverifizierte Kalenderdaten."""
 import sys
 from datetime import date

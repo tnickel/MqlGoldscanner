@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """S7-Bausteine: Wochen-Summenwert und Was-wäre-wenn-Simulation.
 
 **Wochen-Summenwert** („mindestens ein Bewegungstag diese Woche"):

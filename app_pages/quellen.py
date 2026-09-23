@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Quellen — Launch-Check der geplanten Kern-URLs (erster Wächter-Baustein)."""
 from __future__ import annotations
 

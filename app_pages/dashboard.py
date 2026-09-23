@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Dashboard — Stufe 2: Wochenmatrix (Klimatologie), Schwellen-Tabelle, Status."""
 from __future__ import annotations
 
@@ -107,7 +106,14 @@ if laufen:
     st.caption(f"Kurse: {k_info}{llm_info}")
 
 if aktualisieren:
-    st.session_state["matrix"] = baue_matrix(hole_db(), settings)
+    alte = st.session_state.get("matrix") or {}
+    neue = baue_matrix(hole_db(), settings)
+    # Die KI-Fusion der alten Version bleibt sichtbar, bis der nächste
+    # Wochenlauf eine neue erzeugt — „neu bauen" ist ja nur Statistik.
+    for feld in ("llm", "protokoll_llm"):
+        if alte.get(feld) and feld not in neue:
+            neue[feld] = alte[feld]
+    st.session_state["matrix"] = neue
 
 matrix = st.session_state.get("matrix")
 if matrix:

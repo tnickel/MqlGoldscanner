@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Ankertests für den S3-Prognosekern: HAR-Parameter-Recovery, Brier/BSS,
 Platt-Skalierung, Punkt-in-Time-Disziplin, GVZ-Parser."""
 import math

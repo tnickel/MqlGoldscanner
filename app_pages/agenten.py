@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Agenten — GLM-Zugang testen, Budget, geplante Rollen."""
 from __future__ import annotations
 

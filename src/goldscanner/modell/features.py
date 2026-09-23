@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Feature-Matrix für das HAR-Modell (S3) — strikt point-in-time.
 
 Jede Zeile gehört zu einem Handelstag t und enthält NUR Informationen, die

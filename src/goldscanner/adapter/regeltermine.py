@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Regelbasierte Termine — deterministisch berechnet statt gescraped
 (Konzept §5/§7.1: CME-Kalender ist Akamai-gesperrt; Regeln reichen).
 

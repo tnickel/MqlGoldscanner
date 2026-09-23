@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Richtungsmodell (S5): P(Close > Vortag) — eigenes Kalibrierziel.
 
 Logistische Regression (Newton-Raphson, numpy) auf strikt point-in-time-
@@ -294,8 +293,6 @@ def _aktuelle_features(d1: list[dict], db) -> dict | None:
     dollar = db.quant_laden("fred_dtwexbgs")
     cot = db.quant_laden("cot_mm_netto")
     gld = db.quant_laden("gld_tonnen")
-    rv = _serie_wert_vor(realzins, vortag, abstand=2)
-    dl = _serie_wert_vor(dollar, vortag, abstand=2)
     gv = _serie_wert_vor(gvz, vortag, abstand=1)
     gld_wert = _serie_wert_vor(gld, vortag, abstand=1)
     delta_gld = _delta_n(gld, vortag, 5, abstand=1) if gld_wert is not None else None

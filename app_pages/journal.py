@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Journal — Audit-Protokoll mit vollständigen Prompts und Antworten."""
 from __future__ import annotations
 

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Kurs-Kennzahlen — reiner Code, das LLM zitiert sie nur (KiScanner-Regel 1).
 
 Wilder-Glättung für ATR und RSI (Seed = Mittelwert der ersten `periode`

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Wochenmatrix (S2 Klimatologie + S3 Prognosemodell).
 
 Je Wochentag (Mo–Fr): Klimatologie-P (unkalibrierte Basisrate) UND — wenn

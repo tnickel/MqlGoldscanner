@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Schreibgeschütztes REST-Interface (S7, Vorbild: KiScanner rest_api.py).
 
 Läuft als Hintergrund-Thread in der Streamlit-App und bindet NUR an

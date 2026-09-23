@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Quant-Feeds (S3): implizite Volatilität.
 
 - GVZ-Historie (Cboe CSV, seit 2009): 30-Tage-IV aus GLD-Optionen — das
@@ -11,7 +10,6 @@ from __future__ import annotations
 
 import csv
 import io
-import json
 from datetime import date
 
 import requests

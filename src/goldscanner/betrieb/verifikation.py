@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Verifikations-Agent (S6): Prognose vs. Realität — Grundlage Track-Record.
 
 Für jeden vergangenen Tag D mit Kursdaten wird die Prognose ausgewertet, die

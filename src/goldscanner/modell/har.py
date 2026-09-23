@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """HAR-Kern (S3): OLS auf ln(TR_rel), Normal-CDF-Wahrscheinlichkeit,
 rekursive Mehr-Tages-Prognose für die Wochenmatrix und Platt-Skalierung.
 

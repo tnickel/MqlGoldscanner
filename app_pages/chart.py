@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Chart — XAUUSD-Tageskerzen mit SMA-Overlays und Kennzahlen-Panel."""
 from __future__ import annotations
 

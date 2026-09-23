@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Gemeinsame visuelle Sprache (Port des KiScanner ui_design.py, Gold-Variante).
 
 Calm forensic canvas: dunkles Navy, Gold als einziger Akzent, stabile Flächen

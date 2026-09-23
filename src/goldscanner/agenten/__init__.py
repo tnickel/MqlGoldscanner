@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Agenten der LLM-Schicht (S4): Destillation + Analytiker-Fusion.
 
 Gemeinsame Regeln (Konzept §4 „Engine rechnet, LLM zitiert"):

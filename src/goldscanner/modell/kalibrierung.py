@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Nachkalibrierung (S5): Platt sofort, Isotonic ab ~500 Beobachtungen.
 
 Beide arbeiten auf Roh-Scores eines Modells (z. B. Logit-Scores oder

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Kalender-Adapter (S2): Wirtschafts- und Spezialtermine aus offiziellen,
 maschinenlesbaren Quellen — jeder Abruf landet als Roh-Snapshot in der DB
 (Hash-Dedup = Point-in-time-Archiv), geparst wird ausschließlich aus dem

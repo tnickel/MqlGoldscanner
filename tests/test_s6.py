@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Stufe-6-Tests: Daemon-Zeitplan, Verifikation (point-in-time + Kennzahlen),
 MT5-Export-CSV, Scout, DB v6."""
 from __future__ import annotations

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Geheimnisse: Umgebungsvariablen > .env > config/secrets.local.json (KiScanner-Muster).
 
 secrets.local.json und .env sind via .gitignore ausgeschlossen; hier liegen nur

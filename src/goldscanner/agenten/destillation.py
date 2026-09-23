@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Destillations-Agenten (S4): News + Community → strukturierte Treiber.
 
 Beide laufen auf dem Flash-Modell (Stufe 1): kleine Aufgaben, kleine

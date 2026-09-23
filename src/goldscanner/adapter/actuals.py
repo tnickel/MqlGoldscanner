@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Ist-Werte (Actuals) — zwei Wege (Konzept §1.3/§7.1):
 
 1. PRIMÄR: MQL5-Exporter `mql5/CalendarExport.mq5` — offiziell, historisch,

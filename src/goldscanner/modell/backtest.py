@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Walk-Forward-Backtest (S3) — Entscheidungstor T3.
 
 Expanding Window: für jeden Testtag t wird NUR mit Zeilen < t trainiert und

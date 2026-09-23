@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Gemessene Event-Multiplikatoren (S3): Was machen NFP-/FOMC-/GC-Termine
 historisch wirklich mit der Tages-Range? Reiner Code — das LLM zitiert nur."""
 from __future__ import annotations

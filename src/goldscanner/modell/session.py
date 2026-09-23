@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Session-/Gap-Agent (S5): Intraday-Revision der heutigen Bewegungs-P.
 
 Asia-Range bis 08:00 MEZ + Wochenend-Gap aus den H1-Bars (MT5-Serverzeit ≈

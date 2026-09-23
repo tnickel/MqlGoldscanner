@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """MetaTrader-Kursdaten — offizielles MetaTrader5-Paket, NUR LESEND.
 
 Port der bewährten KiScanner agenten/marktdata.py, erweitert um volle

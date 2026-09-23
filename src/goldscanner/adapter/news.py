@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """News-Adapter (S4): Gold-relevante RSS-Feeds → news_items (Delta-Prinzip).
 
 Konzept §7.2 (live verifiziert 23.09.2026, ehrlicher UA, je 1 Abruf):
@@ -51,7 +50,6 @@ _TREIBER = re.compile(
 
 
 def gold_relevanz(titel: str, beschreibung: str = "", kategorien: str = "") -> int:
-    text = f"{titel} {beschreibung} {kategorien}"
     if _STARK.search(titel) or _STARK.search(kategorien):
         return 3
     if _STARK.search(beschreibung) or _TREIBER.search(titel):

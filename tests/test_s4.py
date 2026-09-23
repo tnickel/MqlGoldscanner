@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Stufe-4-Tests: RSS-Adapter, Community, Prompt-Filler, JSON-Validierung,
 Band-Disziplin, Fail-Fast, Delta-Meldung, DB v4, PDF-Smoke."""
 from __future__ import annotations

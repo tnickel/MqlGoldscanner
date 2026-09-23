@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """SQLite-Datenbank (data/goldscanner.db) mit versioniertem Schema.
 
 Streamlit-Reruns und spaetere Daemon-Threads teilen sich eine Verbindung;
@@ -308,10 +307,11 @@ class Db:
 
     def prognose_letzte(self, woche: str | None = None) -> dict | None:
         """Jüngste gespeicherte Matrix (JSON), je Woche oder gesamt —
-        bevorzugt die Version mit LLM-Fusion."""
+        bevorzugt die Version mit LLM-Fusion (auch wenn danach mehrere
+        reine Statistik-Versionen folgten, z. B. via „Matrix neu bauen“)."""
         sql = ("SELECT * FROM prognose_versionen"
                + (" WHERE woche=?" if woche else "")
-               + " ORDER BY id DESC LIMIT 10")
+               + " ORDER BY id DESC LIMIT 60")
         with self._lock:
             zeilen = self._con.execute(sql, (woche,) if woche else ()).fetchall()
         for zeile in zeilen:                  # neueste zuerst

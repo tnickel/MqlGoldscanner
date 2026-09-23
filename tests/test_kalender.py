@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Kalender-Adapter-Tests: Parsing mit realen Format-Fixtures (aus den
 Deep-Research-Berichten), Zeitzone-Normalisierung, Dedup, Klassifizierung."""
 import sys

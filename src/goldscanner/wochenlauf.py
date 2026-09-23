@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Wochenlauf (S2–S4): Kurse → Kalender → GVZ → Matrix (Klima+HAR) →
 News → Community → LLM-Fusion → Wochen-PDF.
 

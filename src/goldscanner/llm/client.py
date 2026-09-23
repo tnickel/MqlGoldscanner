@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """GLM-Client (Z.ai, OpenAI-kompatibel) mit Token-Budget und Backoff.
 
 Port des bewährten KiScanner-Clients (llm/client.py), ergänzt um ein

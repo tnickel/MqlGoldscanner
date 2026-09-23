@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Quellen-Bewertung (Wächter-Logik) und DB-Roundtrip mit echter SQLite-Datei."""
 import sys
 import tempfile

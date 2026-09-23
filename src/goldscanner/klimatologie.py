@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Klimatologie — die statistische Basisrate der Wochenmatrix (S2).
 
 Definition (Konzept §2): Bewegungstag = True Range > k × Ø-True-Range desselben

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """MqlGoldscanner — Streamlit-App (Stufe 1: Gerüst & Kurse).
 
 Einstiegspunkt: Navigation + globaler Status. Business-Logik liegt in

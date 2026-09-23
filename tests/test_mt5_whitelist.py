@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Statischer Test: das MT5-Modul enthält NUR Whitelist-Aufrufe (KiScanner-Muster).
 TIMEFRAME-/Sonstige Konstanten sind erlaubt — geprüft werden Funktions-CALLS."""
 import ast

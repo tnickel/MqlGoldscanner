@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Quant-Feed-Adapter (S5, Konzept §7.4): Makro- und Positionierungsdaten.
 
 Alle Feeds sind offiziell und maschinenlesbar (live verifiziert 23.09.2026):

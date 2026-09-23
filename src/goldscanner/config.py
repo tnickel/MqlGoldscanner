@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Zentrale Konfiguration: Pfade, Defaults, App-Settings (Vorbild: KiScanner config.py).
 
 Regeln: Credentials NIE hier — nur via secrets_store (Umgebung > .env >
