@@ -5,13 +5,11 @@
 weil es Streamlit-UI baut.)"""
 from __future__ import annotations
 
-import base64
 import json
 from datetime import date, timedelta
 
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
 
 from goldscanner.adapter.kalender import dedup_ereignisse
 from goldscanner.app_state import hole_db
@@ -184,11 +182,17 @@ def _live_daten(knoten: str, settings: dict) -> None:
         if pdfs:
             with st.expander("Vorschau (neuestes PDF direkt im Fenster)",
                              expanded=True):
-                b64 = base64.b64encode(pdfs[0].read_bytes()).decode()
-                components.html(
-                    f'<iframe src="data:application/pdf;base64,{b64}" '
-                    f'style="width:100%;height:560px;border:0"></iframe>',
-                    height=580)
+                # Chrome blockiert eingebettete PDFs aus data:-URLs — die
+                # Seiten werden deshalb mit PyMuPDF zu Bildern gerendert
+                # (immer lesbar, offline, kein Plugin nötig).
+                import fitz
+                doc = fitz.open(pdfs[0])
+                for i, seite in enumerate(doc):
+                    pix = seite.get_pixmap(dpi=110)
+                    st.image(pix.tobytes("png"),
+                             caption=f"{pdfs[0].name} · Seite {i + 1} von {len(doc)}",
+                             use_container_width=True)
+                doc.close()
 
     elif knoten == "export":
         from goldscanner import config as _cfg
