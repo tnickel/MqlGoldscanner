@@ -1,0 +1,155 @@
+# -*- coding: utf-8 -*-
+"""SQLite-Datenbank (data/goldscanner.db) mit versioniertem Schema.
+
+Streamlit-Reruns und spaetere Daemon-Threads teilen sich eine Verbindung;
+sqlite3-Verbindungen sind nicht thread-sicher, deshalb Schloss um alles.
+"""
+from __future__ import annotations
+
+import sqlite3
+import threading
+from datetime import datetime
+from pathlib import Path
+
+from . import config
+
+SCHEMA_VERSION = 1
+
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS rates (
+    symbol TEXT NOT NULL, timeframe TEXT NOT NULL, bar_time INTEGER NOT NULL,
+    open REAL NOT NULL, high REAL NOT NULL, low REAL NOT NULL,
+    close REAL NOT NULL, volumen REAL NOT NULL, abgerufen_am TEXT NOT NULL,
+    PRIMARY KEY (symbol, timeframe, bar_time));
+CREATE TABLE IF NOT EXISTS quellen (
+    url TEXT PRIMARY KEY, name TEXT, kategorie TEXT, aktiv INTEGER DEFAULT 1,
+    letzter_status TEXT, letzter_check TEXT, letzter_hash TEXT,
+    score INTEGER, hinweis TEXT);
+CREATE TABLE IF NOT EXISTS agenten_laeufe (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, beschreibung TEXT,
+    start TEXT NOT NULL, ende TEXT, ok INTEGER);
+CREATE TABLE IF NOT EXISTS agenten_schritte (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, lauf_id INTEGER NOT NULL,
+    zeit TEXT NOT NULL, agent TEXT, art TEXT, prompt TEXT, antwort TEXT,
+    modell TEXT, tokens INTEGER, dauer_s REAL, ok INTEGER, fehler TEXT);
+CREATE TABLE IF NOT EXISTS budget_token (
+    tag TEXT NOT NULL, modell TEXT NOT NULL, tokens INTEGER NOT NULL DEFAULT 0,
+    requests INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (tag, modell));
+"""
+
+
+def _jetzt() -> str:
+    return datetime.now().isoformat(timespec="seconds")
+
+
+class Db:
+    """Dünnes synchronisiertes Zugriffsobjekt um eine SQLite-Verbindung."""
+
+    def __init__(self, datei: Path | None = None):
+        self.datei = datei or config.DB_FILE
+        self.datei.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.Lock()
+        self._con = sqlite3.connect(self.datei, check_same_thread=False)
+        self._con.row_factory = sqlite3.Row
+        with self._lock:
+            self._con.executescript("PRAGMA journal_mode=WAL;")
+            self._con.executescript(_SCHEMA)
+            if self._con.execute("SELECT COUNT(*) FROM schema_version").fetchone()[0] == 0:
+                self._con.execute("INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,))
+            self._con.commit()
+
+    # ── Kurse ────────────────────────────────────────────────────────────
+    def raten_speichern(self, symbol: str, timeframe: str, bars: list[dict]) -> int:
+        """Insert-or-ignore; liefert Anzahl NEUER Zeilen."""
+        zeilen = [(symbol, timeframe, int(b["time"]), float(b["open"]), float(b["high"]),
+                   float(b["low"]), float(b["close"]), float(b.get("volumen", 0)), _jetzt())
+                  for b in bars]
+        with self._lock:
+            cur = self._con.executemany(
+                "INSERT OR IGNORE INTO rates(symbol,timeframe,bar_time,open,high,low,close,"
+                "volumen,abgerufen_am) VALUES (?,?,?,?,?,?,?,?,?)", zeilen)
+            self._con.commit()
+            return cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+
+    def raten_laden(self, symbol: str, timeframe: str, limit: int | None = None) -> list[dict]:
+        sql = ("SELECT bar_time AS time, open, high, low, close, volumen FROM rates "
+               "WHERE symbol=? AND timeframe=? ORDER BY bar_time"
+               + (f" DESC LIMIT {int(limit)}" if limit else ""))
+        with self._lock:
+            zeilen = [dict(r) for r in self._con.execute(sql, (symbol, timeframe)).fetchall()]
+        if limit:
+            zeilen.reverse()
+        return zeilen
+
+    def raten_anzahl(self, symbol: str, timeframe: str) -> int:
+        with self._lock:
+            return self._con.execute("SELECT COUNT(*) FROM rates WHERE symbol=? AND timeframe=?",
+                                     (symbol, timeframe)).fetchone()[0]
+
+    # ── Quellen-Wächter (S1: Launch-Check-Ergebnisse) ────────────────────
+    def quellen_status_speichern(self, ergebnisse: list[dict]) -> None:
+        with self._lock:
+            for e in ergebnisse:
+                self._con.execute(
+                    "INSERT INTO quellen(url,name,kategorie,aktiv,letzter_status,letzter_check,"
+                    "hinweis) VALUES (?,?,?,1,?,?,?) "
+                    "ON CONFLICT(url) DO UPDATE SET letzter_status=excluded.letzter_status,"
+                    "letzter_check=excluded.letzter_check, hinweis=excluded.hinweis",
+                    (e["url"], e["name"], e["kategorie"],
+                     ("ok" if e["ok"] else "fehler") + f" {e['status']}", _jetzt(), e["hinweis"]))
+            self._con.commit()
+
+    # ── Journal ──────────────────────────────────────────────────────────
+    def lauf_starten(self, name: str, beschreibung: str = "") -> int:
+        with self._lock:
+            cur = self._con.execute(
+                "INSERT INTO agenten_laeufe(name,beschreibung,start) VALUES (?,?,?)",
+                (name, beschreibung, _jetzt()))
+            self._con.commit()
+            return int(cur.lastrowid)
+
+    def lauf_beenden(self, lauf_id: int, ok: bool) -> None:
+        with self._lock:
+            self._con.execute("UPDATE agenten_laeufe SET ende=?, ok=? WHERE id=?",
+                              (_jetzt(), 1 if ok else 0, lauf_id))
+            self._con.commit()
+
+    def schritt(self, lauf_id: int, agent: str, art: str, prompt: str = "",
+                antwort: str = "", modell: str = "", tokens: int | None = None,
+                dauer_s: float | None = None, ok: bool = True, fehler: str = "") -> None:
+        with self._lock:
+            self._con.execute(
+                "INSERT INTO agenten_schritte(lauf_id,zeit,agent,art,prompt,antwort,modell,"
+                "tokens,dauer_s,ok,fehler) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (lauf_id, _jetzt(), agent, art, prompt, antwort, modell,
+                 tokens, dauer_s, 1 if ok else 0, fehler))
+            self._con.commit()
+
+    def letzte_schritte(self, n: int = 20) -> list[dict]:
+        with self._lock:
+            zeilen = self._con.execute(
+                "SELECT s.*, l.name AS lauf FROM agenten_schritte s "
+                "LEFT JOIN agenten_laeufe l ON l.id=s.lauf_id "
+                "ORDER BY s.id DESC LIMIT ?", (n,)).fetchall()
+        return [dict(r) for r in zeilen]
+
+    # ── Token-Budget ─────────────────────────────────────────────────────
+    def tokens_heute(self) -> int:
+        with self._lock:
+            return self._con.execute(
+                "SELECT COALESCE(SUM(tokens),0) FROM budget_token "
+                "WHERE tag=date('now','localtime')").fetchone()[0]
+
+    def token_buchen(self, modell: str, tokens: int) -> None:
+        with self._lock:
+            self._con.execute(
+                "INSERT INTO budget_token(tag,modell,tokens,requests) VALUES "
+                "(date('now','localtime'),?,?,1) "
+                "ON CONFLICT(tag,modell) DO UPDATE SET tokens=tokens+excluded.tokens,"
+                "requests=requests+1", (modell, max(0, tokens)))
+            self._con.commit()
+
+    def close(self) -> None:
+        with self._lock:
+            self._con.close()

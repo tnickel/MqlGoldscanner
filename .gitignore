@@ -1,0 +1,32 @@
+# Geheimnisse — NIE committen
+config/secrets.local.json
+.streamlit/secrets.toml
+.env
+.env.*
+
+# Laufzeitdaten
+data/
+*.db
+*.db-wal
+*.db-shm
+*.lock
+*.log
+runs/
+reports/
+
+# Roh-Probes der Deep-Research-Agenten (fremder HTML-Content, nur lokal relevant)
+research/
+doc/DeepResaearch/testlauf/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# IDE / Build
+.idea/
+*.iml
+.vscode/
+target/

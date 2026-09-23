@@ -1,0 +1,39 @@
+# Calm forensic dashboard theme — Gold-Variante (Vorbild: MqlKiScanner)
+[theme]
+base = "dark"
+primaryColor = "#E8B84B"
+backgroundColor = "#0A111E"
+secondaryBackgroundColor = "#142135"
+textColor = "#F1F5F9"
+linkColor = "#F5D67B"
+borderColor = "#273E5B"
+codeBackgroundColor = "#0F1A2A"
+codeTextColor = "#CBD5E1"
+showWidgetBorder = true
+showSidebarBorder = true
+baseRadius = "14px"
+buttonRadius = "10px"
+font = "sans-serif"
+baseFontSize = 15
+headingFontSizes = ["36px", "27px", "21px", "18px", "16px", "14px"]
+headingFontWeights = [750, 700, 650, 600, 600, 600]
+greenColor = "#10B981"
+redColor = "#F43F5E"
+yellowColor = "#F59E0B"
+orangeColor = "#FB923C"
+blueColor = "#38BDF8"
+violetColor = "#A855F7"
+grayColor = "#94A3B8"
+dataframeBorderColor = "#273E5B"
+dataframeHeaderBackgroundColor = "#182840"
+chartCategoricalColors = ["#E8B84B", "#38BDF8", "#10B981", "#A855F7", "#F43F5E"]
+
+[theme.sidebar]
+backgroundColor = "#080E1A"
+secondaryBackgroundColor = "#121E31"
+textColor = "#F1F5F9"
+primaryColor = "#E8B84B"
+borderColor = "#273E5B"
+
+[server]
+headless = true
