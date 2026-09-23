@@ -325,11 +325,12 @@ def richtungs_symbol(p_hoch: float, base_rate: float) -> str:
 def wochen_prognose(db, d1: list[dict], zieltage: list[str]) -> dict | None:
     """P(hoch) je Zieltag: beste Konfiguration auf ALLEN vollständigen Tagen
     gefittet, Features = aktueller Stand, WD-Dummies je Zieltag."""
-    zeilen = [z for z in tages_zeilen(d1, db)
+    alle_zeilen = tages_zeilen(d1, db)
+    zeilen = [z for z in alle_zeilen
               if all(z.get(f) is not None for f in TREND + MAKRO + POSITION)]
     if len(zeilen) < MIN_TRAIN:
         return None
-    ergebnis = walk_forward(tages_zeilen(d1, db))
+    ergebnis = walk_forward(alle_zeilen)
     beste = ergebnis.get("beste_konfiguration")
     if not beste:
         return None

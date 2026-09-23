@@ -66,9 +66,14 @@ def lauf_lock(basis: Path, name: str = "goldscanner_lauff"):
             daten = _lese(datei)
             pid = daten.get("pid")
             alter = int(time.time()) - int(daten.get("zeit", 0))
-            if isinstance(pid, int) and _pid_lebt(pid) and pid != os.getpid() and alter < STALE_S:
+            if isinstance(pid, int) and _pid_lebt(pid) and alter < STALE_S:
+                # Auch die EIGENE PID zählt als belegt: verschachtelte Locks
+                # desselben Namens im selben Prozess sind ein Logikfehler
+                # (z. B. Daemon-Loop + wochenlauf.starten) und dürfen das
+                # äußere Lock nicht still ersetzen.
                 raise LockBesetzt(
-                    f"Ein anderer Prozess hält das Lock (PID {pid}, seit {alter} s).", pid, alter)
+                    f"Ein anderer Lauf hält das Lock (PID {pid}, seit {alter} s).",
+                    pid, alter)
             try:
                 datei.unlink()          # verwaist/abgestürzt: ersetzen
             except OSError:

@@ -31,6 +31,6 @@ NUR gültiges JSON, keine Einleitung, kein Markdown-Codezaun:
 
 {"treiber": [{"name": "...", "richtung": "auf|ab|neutral",
   "horizont": "woche|rückständig", "konfidenz": "niedrig|mittel|hoch",
-  "erklaerung": "1-2 Sätze", "beleg_url": "https://..."}],
+  "erklaerung": "maximal 15 Wörter", "beleg_url": "https://..."}],
  "gesamt_stimmung": "auf|ab|neutral",
  "erkenntnis": "1-2 Sätze Gesamteinschätzung"}

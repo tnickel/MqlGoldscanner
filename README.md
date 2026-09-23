@@ -126,11 +126,13 @@ src/goldscanner/
   ├─ mt5/kurse.py                 MT5 read-only (nativ, Whitelist-geprüft)
   ├─ kennzahlen.py                TR/ATR/RSI/SMA — reiner Code, Ankertests
   ├─ klimatologie.py              Basisrate je Wochentag (Shrinkage), Schwelle B
-  ├─ modell/                      HAR-Features/OLS/Backtest/Event-Multiplikatoren/GVZ
+  ├─ modell/                      HAR-Features/OLS/Backtest/Event-Multiplikatoren/GVZ/Richtung/Kalibrierung/Session
   ├─ adapter/                     Kalender, News-RSS, Community, Quant-Feeds (FRED/CFTC/GLD)
   ├─ agenten/                     Destillation + Analytiker-Fusion (Band-Disziplin)
   ├─ llm/                         GLM-Client + Prompt-Vorlagen (config/prompts/*.md)
   ├─ bericht/                     Wochen-PDF (reportlab)
+  ├─ betrieb/                     Daemon (Zeitplan/Herzschlag), Verifikation, MT5-Export, URL-Scout
+  ├─ rest_api.py                  read-only localhost-REST (:8606) für andere Tools
   ├─ wochenmatrix.py + wochenlauf.py   Matrix-Bau + gesteuerte Pipeline
   ├─ quellen_check.py             Wächter: Status + Content-Type + Signatur
   ├─ db.py / lock.py / config.py  SQLite, Lauf-Lock, Einstellungen

@@ -55,7 +55,8 @@ Heute ist {heute}.
     "richtung": "hoch|runter|neutral",
     "konfidenz": "niedrig|mittel|hoch",
     "treiber": [{"name": "...", "einfluss_pp": 3.0,
-                 "richtung": "auf|ab|neutral", "quelle": "news|community|event|modell"}]}
+                 "richtung": "auf|ab|neutral (auf = erhöht die Bewegungswahrscheinlichkeit)",
+                 "quelle": "news|community|event|modell"}]}
  ],
  "risiken": ["..."],
  "kontra_hinweis": "..."}

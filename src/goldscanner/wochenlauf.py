@@ -38,7 +38,21 @@ def _client_bauen(settings: dict, db) -> GlmClient | None:
 
 
 def starten(db, settings: dict) -> dict:
-    """Läuft synchron (UI zeigt Aktivitäts-Badge). Rückgabe: Gesamtprotokoll."""
+    """Läuft synchron (UI zeigt Aktivitäts-Badge). Rückgabe: Gesamtprotokoll.
+
+    Ein lauf_lock verhindert Doppel-Läufe zwischen GUI-Button und Daemon
+    (gleicher Lockname wie im Daemon: job_wochenlauf)."""
+    from .lock import LockBesetzt, lauf_lock
+    try:
+        with lauf_lock(config.DATA_DIR, "job_wochenlauf"):
+            return _starten_intern(db, settings)
+    except LockBesetzt as exc:
+        return {"sperrung": str(exc), "kurse": {}, "kalender": {}, "gvz": {},
+                "quant": {}, "matrix": {"ok": False, "grund": str(exc)},
+                "news": {}, "community": {}, "llm": {}, "pdf": {}, "export": {}}
+
+
+def _starten_intern(db, settings: dict) -> dict:
     protokoll: dict = {"kurse": {}, "kalender": {}, "gvz": {}, "quant": {},
                        "matrix": {}, "news": {}, "community": {}, "llm": {},
                        "pdf": {}, "export": {}}

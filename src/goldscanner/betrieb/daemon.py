@@ -152,8 +152,14 @@ def hauptschleife() -> None:
                     continue
                 _log(f"Job {job} startet …")
                 try:
-                    with lauf_lock(config.DATA_DIR, f"job_{job}"):
+                    # wochenlauf.starten() nimmt sein Lock selbst (ein Lock
+                    # hier UND dort wäre verschachtelt und kollidiert mit
+                    # sich selbst); alle anderen Jobs lockt der Loop.
+                    if job == "wochenlauf":
                         info = fn(db, config.load_settings())
+                    else:
+                        with lauf_lock(config.DATA_DIR, f"job_{job}"):
+                            info = fn(db, config.load_settings())
                     db.daemon_zeit_setzen(job)
                     db.daemon_status_schreiben(job, True, info)
                     _log(f"Job {job} ok: {info}")

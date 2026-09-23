@@ -82,8 +82,12 @@ if laufen:
         "Wochenlauf: Kurse → Kalender → GVZ → Matrix → News → KI-Fusion …")
     protokoll = wochenlauf_starten(hole_db(), settings)
     banner.empty()
+    if "matrix_objekt" not in protokoll:
+        # Lauf-Sperre (Daemon arbeitet gerade) — nichts Neues anzuzeigen
+        st.warning(protokoll.get("sperrung", "Wochenlauf konnte nicht starten."))
+        st.stop()
     st.session_state["matrix"] = protokoll["matrix_objekt"]
-    kal = protokoll["kalender"]["status"]
+    kal = protokoll["kalender"].get("status", {})
     fehler = [q for q, s in kal.items() if not s.get("ok")]
     if protokoll["kurse"].get("ok"):
         k_info = (f"{protokoll['kurse']['terminal']} · "
