@@ -407,7 +407,8 @@ def lauf_strip_html(status: str, haupttext: str, nebenzeile: str = "",
             f'<span class="gld-strip__side">{uhr}</span></div>')
 
 
-def agenten_baum_html(status: dict[str, str] | None = None) -> str:
+def agenten_baum_html(status: dict[str, str] | None = None,
+                    klickbar: bool = False) -> str:
     """Der Wochenlauf als Baum (SVG): Quellen → Verdichtung → KI-Fusion →
     Ergebnisse. `status` mappt Knoten-Schlüssel auf pending|running|complete
     — läuft ein Knoten, pulsiert er gold; im Ruhezustand neutral."""
@@ -460,7 +461,7 @@ def agenten_baum_html(status: dict[str, str] | None = None) -> str:
         teile.append(f'<path d="M{x1} {y1} C{x1} {y1 + 40}, {x2} {y2 - 40}, '
                      f'{x2} {y2}" fill="none" stroke="{farbe}" '
                      f'stroke-width="{2.2 if status.get(a) == "running" else 1.4}" />')
-    for schluessel, x, y, titel, unter, breite, nutzt_ki in knoten:
+    for schluessel, x, y, knoten_titel, unter, breite, nutzt_ki in knoten:
         zustand = status.get(schluessel, "pending")
         fuellung, textfarbe, rand = farben.get(zustand, farben["pending"])
         klasse = ' class="gk-run"' if zustand == "running" else ""
@@ -472,22 +473,38 @@ def agenten_baum_html(status: dict[str, str] | None = None) -> str:
                      f'fill="#5d4ea6" stroke="#9d8fe0" stroke-width="1"/>'
                      f'<text x="{bx + 15}" y="{y + 3.5}" text-anchor="middle" '
                      f'font-size="9.5" font-weight="800" fill="#e6e0ff">KI</text>')
+        knoten_tooltip = (f"<title>Details öffnen: {html.escape(knoten_titel)}"
+                          "</title>" if klickbar else "")
+        oeffne = schliess = ""
+        if klickbar:
+            # SVG-Link: reine HTML-Navigation (?knoten=…), kein JavaScript —
+            # funktioniert im Hauptdokument und übersteht den Sanitizer.
+            oeffne = (f'<a href="?knoten={schluessel}" '
+                      f'style="cursor:pointer;text-decoration:none">')
+            schliess = "</a>"
         teile.append(
-            f'<g{klasse}><rect x="{x}" y="{y}" rx="10" width="{breite}" '
+            f'{oeffne}<g{klasse}>{knoten_tooltip}'
+            f'<rect x="{x}" y="{y}" rx="10" width="{breite}" '
             f'height="{hoehe_k}" fill="{fuellung}" stroke="{rand}" '
             f'stroke-width="1.4"/>'
             f'<text x="{x + breite / 2}" y="{y + 20}" text-anchor="middle" '
             f'font-size="13" font-weight="700" fill="{textfarbe}">'
-            f'{html.escape(titel)}</text>'
+            f'{html.escape(knoten_titel)}</text>'
             f'<text x="{x + breite / 2}" y="{y + 36}" text-anchor="middle" '
             f'font-size="9.5" fill="#94A3B8">{html.escape(unter)}</text>'
-            f'{badge}</g>')
+            f'{badge}</g>{schliess}')
     teile.append("</svg>")
     return "".join(teile)
 
 
-def zeige_agenten_baum(status: dict[str, str] | None = None) -> None:
-    st.markdown(agenten_baum_html(status), unsafe_allow_html=True)
+def zeige_agenten_baum(status: dict[str, str] | None = None,
+                       key: str = "agentenbaum") -> str | None:
+    """Baum mit klickbaren Knoten (SVG-Links auf ?knoten=<id> — reine
+    HTML-Navigation). Der Rückgabewert bleibt None; das Detail-Popup steuert
+    allein der Query-Parameter. `key` wird ignoriert (Signatur-Kompat.)"""
+    st.markdown(agenten_baum_html(status, klickbar=True),
+                unsafe_allow_html=True)
+    return None
 
 
 def bewegungs_farbe(score: float) -> str:

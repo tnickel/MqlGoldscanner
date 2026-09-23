@@ -62,6 +62,10 @@ zeige_stepper([
 settings = config.load_settings()
 
 # ── Wochenlauf (Hintergrund-Thread + Live-Stepper im Fragment) ────────────
+import sys as _sys
+_sys.path.insert(0, str(ROOT / "app_pages"))
+from _knoten_popup import knoten_dialog as _knoten_dialog
+from goldscanner.help_content import KNOTEN_INFO
 from goldscanner import lauf_zustand
 from goldscanner.help_content import HELP
 
@@ -101,6 +105,19 @@ _BAUM_MAP = {
     "fusion": ["news_destill", "comm_destill", "fusion"],
     "bericht": ["pdf", "export", "matrix"],
 }
+
+
+def _baum_mit_popup(status: dict, key: str) -> None:
+    """Baum rendern; Klick → Knoten-ID als Query-Parameter setzen (öffnet
+    das Detail-Popup). Der Latch verhindert, dass der persistente
+    Komponenten-Wert das Popup nach dem Schließen sofort wieder öffnet."""
+    wert = zeige_agenten_baum(status, key=key)
+    if wert:
+        letzter = st.session_state.get(f"baum_{key}_alt")
+        if wert != letzter:
+            st.session_state[f"baum_{key}_alt"] = wert
+            st.query_params["knoten"] = wert
+            st.rerun()
 
 
 def _baum_status(z: dict) -> dict[str, str]:
@@ -165,7 +182,7 @@ def _lauf_anzeige():
             st.caption("Kette = **Fortschritt** (was läuft, was kommt) · "
                        "Baum = **Stufen & Verknüpfung** (wovon hängt was ab) — "
                        "beide zeigen denselben Lauf.")
-            zeige_agenten_baum(_baum_status(z))
+            _baum_mit_popup(_baum_status(z), key="baum_live")
             status_feed(list(reversed(z["meldungen"][-6:])) or ["Start …"])
         else:                                   # fertig im Fragment-Takt
             st.markdown(lauf_strip_html("complete", "Wochenlauf abgeschlossen"),
@@ -191,10 +208,10 @@ if not _laeuft_gerade:
                         "Die Kette darüber zeigt während eines Laufs den "
                         "**Fortschritt** (Reihenfolge), dieser Baum zeigt die "
                         "**Stufen und ihr Zusammenspiel** — derselbe Lauf, zwei "
-                        "Blickwinkel.")
+                        "Blickwinkel. **Knoten sind klickbar** — Details im Popup.")
         with kopf_i:
             _info_button("wochenlauf", kkey="baum")
-        zeige_agenten_baum(_baum_status(lauf_zustand.lesen()))
+        _baum_mit_popup(_baum_status(lauf_zustand.lesen()), key="baum_stat")
         st.caption("Grau = wartet · Gold (pulsierend) = läuft gerade · "
                    "Grün = erledigt · **violettes „KI“-Badge = hier arbeitet ein "
                    "Sprachmodell (GLM)**. Links rechnet reiner Code — die "
@@ -227,6 +244,11 @@ if laufen and not _laeuft_gerade:
                      name="goldscanner-wochenlauf").start()
 
 _lauf_anzeige()
+
+# Knoten-Popup, wenn per Baum-Klick gesetzt (?knoten=<id>)
+_angewaehlt = st.query_params.get("knoten")
+if _angewaehlt in KNOTEN_INFO:
+    _knoten_dialog(_angewaehlt, settings)
 
 # Fertiges Ergebnis einmalig verarbeiten (vom Fragment übergeben)
 if "wochenlauf_protokoll" in st.session_state:
