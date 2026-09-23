@@ -19,10 +19,29 @@ import goldscanner.wochenlauf as wochenlauf  # noqa: E402
 
 
 def test_starten_lock_pfad_ohne_nameerror(monkeypatch):
-    monkeypatch.setattr(wochenlauf, "_starten_intern",
-                        lambda db, settings: {"ok": True, "fake": True})
+    gesehen = []
+
+    def fake_intern(db, settings, fortschritt=None):
+        gesehen.append(fortschritt)
+        return {"ok": True, "fake": True}
+
+    monkeypatch.setattr(wochenlauf, "_starten_intern", fake_intern)
     ergebnis = wochenlauf.starten(None, {})
     assert ergebnis == {"ok": True, "fake": True}
+    assert gesehen == [None]                 # Callback optional, Lauf läuft
+
+
+def test_starten_reicht_fortschritt_durch(monkeypatch):
+    gesehen = []
+
+    def fake_intern(db, settings, fortschritt=None):
+        gesehen.append(fortschritt)
+        return {"ok": True}
+
+    monkeypatch.setattr(wochenlauf, "_starten_intern", fake_intern)
+    callback = lambda station, text=None: None
+    wochenlauf.starten(None, {}, fortschritt=callback)
+    assert gesehen == [callback]             # Callback wandert bis nach innen
 
 
 def test_starten_meldet_sperrung_sauber(monkeypatch, tmp_path):

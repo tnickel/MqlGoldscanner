@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import math
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,7 +16,8 @@ import streamlit as st
 from goldscanner import config, secrets_store
 from goldscanner.app_state import hole_db
 from goldscanner.kennzahlen import kennzahlen_aus_d1
-from goldscanner.ui_design import page_header, status_feed, zeige_stepper
+from goldscanner.ui_design import (lauf_strip_html, page_header, status_feed,
+                                   zeige_agenten_baum, zeige_stepper)
 from goldscanner.wochenlauf import starten as wochenlauf_starten
 from goldscanner.wochenmatrix import baue_matrix
 
@@ -60,14 +61,147 @@ zeige_stepper([
 
 settings = config.load_settings()
 
-# ── Wochenlauf ────────────────────────────────────────────────────────────
+# ── Wochenlauf (Hintergrund-Thread + Live-Stepper im Fragment) ────────────
+from goldscanner import lauf_zustand
+from goldscanner.help_content import HELP
+
+
+@st.dialog("Hilfe & Hintergrund", width="medium")
+def _hilfe_dialog(thema: str) -> None:
+    titel, text = HELP[thema]
+    st.subheader(titel)
+    st.markdown(text)
+
+
+@st.fragment
+def _info_button(thema: str, kkey: str | None = None) -> None:
+    """Gelbes i wie im KiScanner — öffnet den Hilfe-Dialog, ohne die Seite
+    neu zu starten (nur das Fragment rerunt)."""
+    titel = HELP[thema][0]
+    if st.button(":material/info:", key=f"info_{kkey or thema}",
+                 help=f"Erklärung: {titel}"):
+        _hilfe_dialog(thema)
+
+
+LAUF_STATIONEN = [  # (Schlüssel, Titel, Meta) — Reihenfolge = Pipeline
+    ("kurse", "Kurse", "MT5 · 17 Jahre"),
+    ("kalender", "Kalender", "5 Quellen + Termine"),
+    ("gvz", "Marktdaten", "GVZ · Cboe"),
+    ("quant", "Quant-Feeds", "FRED · CFTC · GLD"),
+    ("matrix", "Matrix", "Klima + HAR + Richtung"),
+    ("news", "News", "8 RSS-Feeds · Delta"),
+    ("fusion", "KI-Fusion", "Destillation + Analytiker"),
+    ("bericht", "Bericht", "PDF + MT5-Export"),
+]
+
+# Station → Baumknoten (ein Schritt kann mehrere Knoten beleuchten)
+_BAUM_MAP = {
+    "kurse": ["kurse"], "kalender": ["kalender"], "gvz": ["gvz"],
+    "quant": ["gvz"], "matrix": ["statistik"], "news": ["news", "community"],
+    "fusion": ["news_destill", "comm_destill", "fusion"],
+    "bericht": ["pdf", "export", "matrix"],
+}
+
+
+def _baum_status(z: dict) -> dict[str, str]:
+    """Baumknoten-Status aus dem Lauf-Zustand: gelaufene grün, laufende
+    gold, kommende grau."""
+    stationen = z.get("stationen") or [s for s, _, _ in LAUF_STATIONEN]
+    aktuell = z.get("station")
+    if not z.get("aktiv"):
+        return {}
+    idx = stationen.index(aktuell) if aktuell in stationen else -1
+    status: dict[str, str] = {}
+    for i, station in enumerate(stationen):
+        zustand = ("complete" if i < idx else "running" if i == idx else "pending")
+        for knoten in _BAUM_MAP.get(station, []):
+            status[knoten] = zustand
+    return status
+
+
+def _lauf_worker():
+    """Führt den Wochenlauf im Hintergrund aus und meldet Fortschritt in
+    den lauf_zustand — das Fragment liest ihn sekündlich aus."""
+    try:
+        def fortschritt(station, text=None):
+            lauf_zustand.station_setzen(station, text)
+        protokoll = wochenlauf_starten(hole_db(), config.load_settings(),
+                                       fortschritt=fortschritt)
+        lauf_zustand.beenden(protokoll=protokoll)
+    except Exception as exc:
+        lauf_zustand.beenden(fehler=f"{type(exc).__name__}: {exc}")
+
+
+@st.fragment(run_every=1.0)
+def _lauf_anzeige():
+    """Live-Anzeige während des Wochenlaufs: Lauf-Zentrale (pulsierender
+    Punkt + Stoppuhr), Stations-Stepper (aktiver Knoten pulsiert) und
+    Meldungs-Feed. Läuft sekündlich neu, solange der Thread arbeitet."""
+    z = lauf_zustand.lesen()
+    if not (z["aktiv"] or (z["fertig"] and z["protokoll"] is None)):
+        return
+    try:
+        start = datetime.fromisoformat(z["start_zeit"])
+        sekunden = max(0, int((datetime.now() - start).total_seconds()))
+    except (TypeError, ValueError):
+        sekunden = None
+
+    with st.container(border=True):
+        if z["aktiv"]:
+            stationen = [s for s, _, _ in LAUF_STATIONEN]
+            idx = stationen.index(z["station"]) if z["station"] in stationen else -1
+            titel = dict((s, t) for s, t, _ in LAUF_STATIONEN).get(
+                z["station"], z["station"] or "Start")
+            letzte = z["meldungen"][-1] if z["meldungen"] else ""
+            st.markdown(lauf_strip_html("running", f"Wochenlauf · {titel}",
+                                        letzte, sekunden), unsafe_allow_html=True)
+            steps = []
+            for i, (schluessel, name, meta) in enumerate(LAUF_STATIONEN):
+                status = ("complete" if i < idx else
+                          "running" if i == idx else "pending")
+                steps.append({"nr": i + 1, "title": name, "status": status,
+                              "meta": meta})
+            zeige_stepper(steps, overall=(idx + 1) / len(LAUF_STATIONEN))
+            zeige_agenten_baum(_baum_status(z))
+            status_feed(list(reversed(z["meldungen"][-6:])) or ["Start …"])
+        else:                                   # fertig im Fragment-Takt
+            st.markdown(lauf_strip_html("complete", "Wochenlauf abgeschlossen"),
+                        unsafe_allow_html=True)
+    if not z["aktiv"] and z["fertig"]:
+        # Ergebnis an den Hauptlauf übergeben und ganz neu rendern
+        st.session_state["wochenlauf_protokoll"] = z["protokoll"]
+        lauf_zustand.beenden(protokoll=None)    # Fragment zeigt künftig nichts
+        st.rerun()
+
+
+# ── Übersicht: der Wochenlauf als Baum (was alles zu tun ist) ─────────────
+with st.container(border=True):
+    Kopf_links, kopf_i = st.columns([6, 0.35], gap="small",
+                                    vertical_alignment="center")
+    with Kopf_links:
+        st.markdown("**So ist der Wochenlauf aufgebaut** — Datenquellen oben "
+                    "laufen zusammen; was gold leuchtet, arbeitet gerade.")
+    with kopf_i:
+        _info_button("wochenlauf", kkey="baum")
+    zeige_agenten_baum(_baum_status(lauf_zustand.lesen()))
+    st.caption("Grau = wartet · Gold (pulsierend) = läuft gerade · "
+               "Grün = erledigt · **violettes „KI“-Badge = hier arbeitet ein "
+               "Sprachmodell (GLM)**. Links rechnet reiner Code — die "
+               "Statistik-Engine ist bewusst KI-frei („Engine rechnet, LLM "
+               "zitiert“).")
+
 links, mitte, rechts = st.columns([1, 1, 2.2], vertical_alignment="center")
+_laeuft_gerade = lauf_zustand.laeuft()
 with links:
     laufen = st.button("Wochenlauf starten", type="primary",
-                       icon=":material/rocket_launch:")
+                       icon=":material/rocket_launch:",
+                       disabled=_laeuft_gerade)
+    _info_button("wochenlauf", kkey="btn_wochenlauf")
 with mitte:
     aktualisieren = st.button("Matrix neu bauen", icon=":material/refresh:",
-                              help="Ohne neue Abrufe — nur Statistik auf lokalen Daten")
+                              help="Ohne neue Abrufe — nur Statistik auf lokalen Daten",
+                              disabled=_laeuft_gerade)
+    _info_button("matrix_neu", kkey="btn_matrix")
 with rechts:
     letzter = hole_db().letzte_schritte(50)
     letzte_matrix = [z for z in letzter if z["lauf"] == "wochenlauf"]
@@ -76,38 +210,44 @@ with rechts:
     else:
         st.caption("Noch kein Wochenlauf — startet Kurse + Kalender + Matrix")
 
-if laufen:
-    from goldscanner.ui_design import aktivitaets_banner
-    banner = aktivitaets_banner(
-        "Wochenlauf: Kurse → Kalender → GVZ → Matrix → News → KI-Fusion …")
-    protokoll = wochenlauf_starten(hole_db(), settings)
-    banner.empty()
-    if "matrix_objekt" not in protokoll:
-        # Lauf-Sperre (Daemon arbeitet gerade) — nichts Neues anzuzeigen
-        st.warning(protokoll.get("sperrung", "Wochenlauf konnte nicht starten."))
-        st.stop()
-    st.session_state["matrix"] = protokoll["matrix_objekt"]
-    kal = protokoll["kalender"].get("status", {})
-    fehler = [q for q, s in kal.items() if not s.get("ok")]
-    if protokoll["kurse"].get("ok"):
-        k_info = (f"{protokoll['kurse']['terminal']} · "
-                  + ", ".join(f"{tf}={n}" for tf, n in protokoll["kurse"]["bars"].items()))
-    else:
-        k_info = "DB-Fallback (" + str(protokoll["kurse"].get("grund", ""))[:60] + ")"
-    llm = protokoll.get("llm", {})
-    llm_info = ""
-    if llm.get("ok"):
-        fusion = llm.get("fusion", {})
-        llm_info = (f" · KI-Fusion ok (Δmax {fusion.get('delta_max_pp', 0):.0f} pp, "
-                    f"{llm.get('tokens', 0):,} Token)".replace(",", "."))
-        if protokoll.get("pdf", {}).get("ok"):
-            llm_info += " · PDF erzeugt"
-    else:
-        llm_info = " · KI-Fusion aus (" + str(llm.get("grund", ""))[:60] + ")"
-    st.toast(f"Wochenlauf fertig · Kalender: {len(kal) - len(fehler)}/{len(kal)} Quellen"
-             + (f" (Fehler: {', '.join(fehler)})" if fehler else ""),
-             icon=":material/check_circle:")
-    st.caption(f"Kurse: {k_info}{llm_info}")
+if laufen and not _laeuft_gerade:
+    import threading
+    lauf_zustand.zuruecksetzen([s for s, _, _ in LAUF_STATIONEN])
+    threading.Thread(target=_lauf_worker, daemon=True,
+                     name="goldscanner-wochenlauf").start()
+
+_lauf_anzeige()
+
+# Fertiges Ergebnis einmalig verarbeiten (vom Fragment übergeben)
+if "wochenlauf_protokoll" in st.session_state:
+    protokoll = st.session_state.pop("wochenlauf_protokoll")
+    if protokoll is not None:
+        if "matrix_objekt" not in protokoll:
+            # Lauf-Sperre (Daemon arbeitet gerade) — nichts Neues anzuzeigen
+            st.warning(protokoll.get("sperrung", "Wochenlauf konnte nicht starten."))
+            st.stop()
+        st.session_state["matrix"] = protokoll["matrix_objekt"]
+        kal = protokoll["kalender"].get("status", {})
+        fehler = [q for q, s in kal.items() if not s.get("ok")]
+        if protokoll["kurse"].get("ok"):
+            k_info = (f"{protokoll['kurse']['terminal']} · "
+                      + ", ".join(f"{tf}={n}" for tf, n in protokoll["kurse"]["bars"].items()))
+        else:
+            k_info = "DB-Fallback (" + str(protokoll["kurse"].get("grund", ""))[:60] + ")"
+        llm = protokoll.get("llm", {})
+        llm_info = ""
+        if llm.get("ok"):
+            fusion = llm.get("fusion", {})
+            llm_info = (f" · KI-Fusion ok (Δmax {fusion.get('delta_max_pp', 0):.0f} pp, "
+                        f"{llm.get('tokens', 0):,} Token)".replace(",", "."))
+            if protokoll.get("pdf", {}).get("ok"):
+                llm_info += " · PDF erzeugt"
+        else:
+            llm_info = " · KI-Fusion aus (" + str(llm.get("grund", ""))[:60] + ")"
+        st.toast(f"Wochenlauf fertig · Kalender: {len(kal) - len(fehler)}/{len(kal)} Quellen"
+                 + (f" (Fehler: {', '.join(fehler)})" if fehler else ""),
+                 icon=":material/check_circle:")
+        st.caption(f"Kurse: {k_info}{llm_info}")
 
 if aktualisieren:
     alte = st.session_state.get("matrix") or {}
@@ -239,6 +379,9 @@ if matrix:
         with st.expander(
                 f"Richtung & Marktlage (Stufe 5) — P(hoch) je Tag · Tor T5 "
                 f"{'BESTANDEN' if bt.get('tor_t5_bestanden') else 'offen/nicht bestanden'}"):
+            _r_c, _r_i = st.columns([8, 0.3], gap="small")
+            with _r_i:
+                _info_button("richtung_marktlage", kkey="richtung")
             if bt.get("tor_t5_bestanden"):
                 st.success(f"**Tor T5:** Konfiguration `{richtung_sek['konfiguration']}` "
                            f"schlägt die Ø-Aufwärtswahrscheinlichkeit im Walk-Forward "
@@ -296,10 +439,16 @@ if matrix:
         with st.expander(f"Wochen-Summenwert — P(mindestens 1 Bewegungstag) "
                          f"**{woche_summe['p_mindestens_ein_modell'] * 100:.0f} %** "
                          f"(Klima {woche_summe['p_mindestens_ein_klima'] * 100:.0f} %)"):
+            _w_c, _w_i = st.columns([8, 0.3], gap="small")
+            with _w_i:
+                _info_button("wochen_summe", kkey="summe")
             st.caption(woche_summe.get("hinweis", ""))
     if je_tag_verteilung:
         with st.expander("Was-wäre-wenn — Simulation (verändert keine "
                          "gespeicherte Prognose)", expanded=False):
+            _s_c, _s_i = st.columns([8, 0.3], gap="small")
+            with _s_i:
+                _info_button("was_waere_wenn", kkey="szenario")
             c1, c2, c3 = st.columns(3, gap="small")
             with c1:
                 vola = st.slider("Volatilität", -50, 100, 0, 5,
@@ -344,6 +493,9 @@ if matrix:
         with st.expander(
                 f"KI-Analyse (Stufe 4) — Analytiker-Fusion im ±{band:.0f}-pp-Band · "
                 f"Δmax {llm_sektion.get('delta_max_pp', 0):.0f} pp", expanded=True):
+            _ki_c, _ki_i = st.columns([8, 0.3], gap="small")
+            with _ki_i:
+                _info_button("ki_analyse", kkey="ki")
             if llm_sektion.get("zusammenfassung"):
                 st.markdown(llm_sektion["zusammenfassung"])
             fusion_je_tag_llm = {t["datum"]: t for t in llm_sektion.get("tage", [])}
@@ -406,7 +558,7 @@ else:
 
 st.divider()
 
-# ── KPI-Zeile ─────────────────────────────────────────────────────────────
+# ── KPI-Zeile mit Bewegungs-Skala (grün ruhig → rot bewegt) ───────────────
 symbol = settings.get("mt5_symbol", "XAUUSD")
 kennz: dict = {}
 quelle = ""
@@ -420,21 +572,68 @@ else:
         kennz = kennzahlen_aus_d1(d1)
         quelle = f"Datenbank · {len(d1)} D1-Bars"
 
-k1, k2, k3, k4, k5 = st.columns(5, gap="small", vertical_alignment="center")
-with k1:
-    st.metric(f"{symbol} Close", kennz.get("close", "–"),
-              None if not kennz else f"{kennz.get('veraenderung_heute_pct', 0):+.2f} %",
-              border=True)
-with k2:
-    st.metric("ATR 14 (D1) · USD", kennz.get("atr14_d1", "–"), border=True)
-with k3:
-    st.metric("TR heute · USD", kennz.get("tr_heute", "–"), border=True)
-with k4:
-    st.metric("RSI 14 (D1)", kennz.get("rsi14_d1", "–"), border=True)
-with k5:
-    st.metric("Kalender-Events", hole_db().events_anzahl(), border=True)
+from goldscanner.ui_design import kpi_karte_html, kpi_zeile_html
+
+
+def _perzentil_score(wert_rel: float, historie_rel: list[float]) -> float | None:
+    """Anteil der Historie, die RUHIGER war (0=sehr ruhig, 1=sehr bewegt)."""
+    if not historie_rel or wert_rel is None:
+        return None
+    return sum(1 for h in historie_rel if h < wert_rel) / len(historie_rel)
+
+
+_d1_kpi = hole_db().raten_laden(symbol, "d1")
+_rel_hist: list[float] = []
+for i in range(1, len(_d1_kpi)):
+    pc = _d1_kpi[i - 1]["close"]
+    tr = max(_d1_kpi[i]["high"] - _d1_kpi[i]["low"],
+             abs(_d1_kpi[i]["high"] - pc), abs(_d1_kpi[i]["low"] - pc))
+    if _d1_kpi[i]["close"]:
+        _rel_hist.append(tr / _d1_kpi[i]["close"])
+_rel_hist = _rel_hist[-252:]          # ~12 Monate
+
+karten = []
+# Close mit Tagesänderung: Farbe nach Bewegtheit der Änderung
+if kennz.get("close"):
+    veraenderung = kennz.get("veraenderung_heute_pct") or 0.0
+    close_score = min(abs(veraenderung) / 2.0, 1.0)
+    karten.append(kpi_karte_html(
+        f"{symbol} Close", f"{kennz['close']}", close_score,
+        f"{veraenderung:+.2f} % heute"))
+for titel, schluessel in (("ATR 14 (D1)", "atr14_d1"), ("TR heute", "tr_heute")):
+    wert = kennz.get(schluessel)
+    score = neben = None
+    if wert is not None and kennz.get("close"):
+        rel = wert / kennz["close"]
+        score = _perzentil_score(rel, _rel_hist)
+        if score is not None:
+            neben = (f"Perzentil {score * 100:.0f} — bewegter als "
+                     f"{score * 100:.0f} % der letzten 12 Monate")
+    karten.append(kpi_karte_html(titel + " · USD", f"{wert:.1f}" if wert else "–",
+                                 score, neben or ""))
+rsi = kennz.get("rsi14_d1")
+if rsi is not None:
+    rsi_score = min(abs(rsi - 50) / 30, 1.0)
+    richtung = "aufwärts" if rsi > 55 else "abwärts" if rsi < 45 else "seitwärts"
+    karten.append(kpi_karte_html("RSI 14 (D1)", f"{rsi:.0f}", rsi_score,
+                                 f"letzte Tage eher {richtung}"))
+_relevante_events = sum(
+    1 for e in hole_db().events_fuer_zeitraum(
+        date.today().isoformat(),
+        (date.today() + timedelta(days=6)).isoformat())
+    if (e.get("gold_relevanz") or 0) >= 4)
+karten.append(kpi_karte_html(
+    "Events diese Woche (★≥4)", str(_relevante_events),
+    min(_relevante_events / 6, 1.0),
+    f"{hole_db().events_anzahl():,} gesamt in DB".replace(",", ".")))
+st.markdown(kpi_zeile_html(karten), unsafe_allow_html=True)
+_kpi_links, _kpi_i = st.columns([8, 0.3], gap="small")
+with _kpi_i:
+    _info_button("kpi_kennzahlen", kkey="kpi")
 if quelle:
-    st.caption(f"Kursgrundlage: {quelle} · Zeitangaben = MT5-Serverszeit")
+    st.caption(f"Kursgrundlage: {quelle} · Skala: grün = ruhig, rot = viel "
+               "Bewegung (gegen die eigene 12-Monats-Historie) · "
+               "Zeitangaben = MT5-Serverzeit")
 
 st.divider()
 

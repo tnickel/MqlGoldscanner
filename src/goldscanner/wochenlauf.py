@@ -36,22 +36,34 @@ def _client_bauen(settings: dict, db) -> GlmClient | None:
         base_url=config.glm_base_url(settings), db=db)
 
 
-def starten(db, settings: dict) -> dict:
+def starten(db, settings: dict, fortschritt=None) -> dict:
     """Läuft synchron (UI zeigt Aktivitäts-Badge). Rückgabe: Gesamtprotokoll.
 
     Ein lauf_lock verhindert Doppel-Läufe zwischen GUI-Button und Daemon
-    (gleicher Lockname wie im Daemon: job_wochenlauf)."""
+    (gleicher Lockname wie im Daemon: job_wochenlauf).
+
+    fortschritt: optionaler Callback fortschritt(station_schluessel), der
+    zu Beginn jeder Phase gerufen wird — die GUI nutzt ihn, um den
+    Live-Stepper pulsieren zu lassen (der Daemon ruft ohne)."""
     from .lock import LockBesetzt, lauf_lock
     try:
         with lauf_lock(config.DATA_DIR, "job_wochenlauf"):
-            return _starten_intern(db, settings)
+            return _starten_intern(db, settings, fortschritt=fortschritt)
     except LockBesetzt as exc:
         return {"sperrung": str(exc), "kurse": {}, "kalender": {}, "gvz": {},
                 "quant": {}, "matrix": {"ok": False, "grund": str(exc)},
                 "news": {}, "community": {}, "llm": {}, "pdf": {}, "export": {}}
 
 
-def _starten_intern(db, settings: dict) -> dict:
+def _starten_intern(db, settings: dict, fortschritt=None) -> dict:
+
+    def _melde(station: str, text: str | None = None) -> None:
+        """Station setzen (+ optionale Live-Meldung) — Anzeige darf nie brechen."""
+        if fortschritt is not None:
+            try:
+                fortschritt(station, text)
+            except Exception:
+                pass
     protokoll: dict = {"kurse": {}, "kalender": {}, "gvz": {}, "quant": {},
                        "matrix": {}, "news": {}, "community": {}, "llm": {},
                        "pdf": {}, "export": {}}
@@ -61,6 +73,8 @@ def _starten_intern(db, settings: dict) -> dict:
         "Kurse + Kalender + Quant-Feeds + Matrix (S2–S5) + LLM-Schicht (S4)")
     try:
         # 1) Kurse frisch halten (Fehler tolerieren: DB-Bestand reicht notfalls)
+        _melde("kurse", "Kurse: verbinde mit MetaTrader …")
+        _melde("kurse")
         try:
             ergebnis = kurse.kurse_holen(settings)
             if ergebnis.get("ok"):
@@ -70,13 +84,18 @@ def _starten_intern(db, settings: dict) -> dict:
                                       "bars": ergebnis["bars"], "neu": neu}
             else:
                 protokoll["kurse"] = {"ok": False, "grund": ergebnis.get("grund")}
+            _melde("kurse", "Kurse: "
+                   + (f"{protokoll['kurse'].get('bars', {}).get('d1', '?')} D1-Bars"
+                      if protokoll["kurse"].get("ok") else "DB-Fallback aktiv"))
         except Exception as exc:
             protokoll["kurse"] = {"ok": False, "grund": f"{type(exc).__name__}: {exc}"}
 
         # 2) Kalender-Adapter (jede Quelle einzeln fehler-tolerant)
+        _melde("kalender")
         protokoll["kalender"] = kalender.wochenabruf(db, settings)
 
         # 3) GVZ-Historie (implizite Volatilität) — Fehler tolerieren
+        _melde("gvz")
         try:
             protokoll["gvz"] = gvz_aktualisieren(db, settings)
         except Exception as exc:
@@ -84,17 +103,20 @@ def _starten_intern(db, settings: dict) -> dict:
 
         # 3b) Quant-Feeds (S5): FRED-Realzins/Dollar/VIX, COT, GLD — jede
         # Quelle einzeln fehler-tolerant; ohne sie bleibt Richtung auf R1/R2
+        _melde("quant")
         try:
             protokoll["quant"] = quant_adapter.quant_abruf(db, settings)
         except Exception as exc:
             protokoll["quant"] = {"ok": False, "grund": f"{type(exc).__name__}: {exc}"}
 
         # 4) Matrix aus lokalen Daten (Klima + HAR + Richtung S5)
+        _melde("matrix")
         matrix = baue_matrix(db, settings)
         protokoll["matrix"] = {"ok": True, "woche": matrix["woche"],
                                "modell": matrix["modell"]}
 
         # 5) News-RSS (Delta-Prinzip) + 6) Community — Fehler tolerieren
+        _melde("news")
         try:
             protokoll["news"] = news_adapter.sammle_news(db, settings)
         except Exception as exc:
@@ -112,15 +134,24 @@ def _starten_intern(db, settings: dict) -> dict:
                                 "grund": "Kein GLM-Key gesetzt — Matrix bleibt "
                                          "rein statistisch (Einstellungen → GLM)."}
         else:
+            _melde("fusion", "KI: News-Destillation läuft (glm-5.3-flash) …")
             news_d = destillation.news_destillieren(db, settings, client, lauf)
+            _melde("fusion", "KI: News-Destillation "
+                   + (f"ok · {news_d.get('tokens', 0):,} Token".replace(",", ".")
+                      if news_d.get("ok") else "fehlgeschlagen (übersprungen)"))
             community_d = None
             if protokoll["community"].get("ok"):
+                _melde("fusion", "KI: Community-Destillation läuft …")
                 community_d = destillation.community_destillieren(
                     db, settings, client, protokoll["community"], lauf)
+            _melde("fusion", "KI: Analytiker-Fusion läuft (glm-5.3, ±Band) …")
             fusion = analytiker.fusioniere(db, settings, client, matrix,
                                            news_d if news_d.get("ok") else None,
                                            community_d if community_d and community_d.get("ok") else None,
                                            lauf)
+            _melde("fusion", "KI: Fusion "
+                   + (f"ok · Δmax {fusion.get('delta_max_pp', 0):.0f} pp"
+                      if fusion.get("ok") else "fehlgeschlagen"))
             protokoll["llm"] = {
                 "ok": bool(fusion.get("ok")),
                 "news": {k: news_d.get(k) for k in ("ok", "n_items", "erkenntnis",
@@ -139,6 +170,7 @@ def _starten_intern(db, settings: dict) -> dict:
                     json.dumps(matrix, ensure_ascii=False))
 
                 # 8) Wochen-PDF
+                _melde("bericht", "Bericht: Wochen-PDF + MT5-Export …")
                 try:
                     pfad = pdf_bericht.baue_wochen_pdf(matrix)
                     protokoll["pdf"] = {"ok": True, "datei": str(pfad)}
