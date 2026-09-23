@@ -31,6 +31,12 @@ if "%GEFUNDEN%"=="1" (
 )
 
 echo Starte MqlGoldscanner - Browser oeffnet sich gleich ...
+
+rem Browser im Standard-Browser oeffnen, SOBALD der Server lauscht:
+rem ein minimiertes PowerShell-Hilfsfenster pollt den Port (max. 30 s,
+rem sprachneutral ueber Get-NetTCPConnection) und oeffnet dann die Seite.
+start "" /min powershell -NoProfile -Command "for($i=0;$i -lt 60;$i++){ if(Get-NetTCPConnection -LocalPort 8505 -State Listen -ErrorAction SilentlyContinue){ break }; Start-Sleep -Milliseconds 500 }; Start-Process 'http://localhost:8505/'"
+
 python -m streamlit run streamlit_app.py --server.port 8505 --browser.gatherUsageStats false
 if errorlevel 1 (
     echo.
