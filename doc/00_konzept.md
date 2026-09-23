@@ -1,4 +1,4 @@
-# MqlGoldscanner — Konzept (v0.2.2, Stand 23.09.2026)
+# MqlGoldscanner — Konzept (v0.2.3, Stand 23.09.2026)
 
 Multi-Agenten-Tool, das den Goldmarkt (XAUUSD) recherchiert und für jede Kalenderwoche
 eine Übersicht erstellt. **Hauptziel: Für jeden Wochentag eine kalibrierte Aussage zu
@@ -498,7 +498,7 @@ MqlGoldscanner/
 | **1 — Gerüst & Kurse** ✅ | Streamlit-App (8 Bereiche, KiScanner-Design in Gold), Config+Secrets+SQLite, GlmClient m. Fehler-Taxonomie+Budget, MT5 nativ (Kurse D1/H4/H1), Plotly-Candlestick-Chart, Quellen-Launch-Check — **umgesetzt am 23.09.2026 (Python-Neubau nach Nutzer-Entscheidung)** | App läuft, Kurse sichtbar |
 | **2 — Statistik zuerst** ✅ | Kalender-Adapter (FF/BLS/BEA/Fed/Treasury, Hash-Snapshot-Archiv), Regeltermine, Actuals (MQL5-Exporter bereit + Nasdaq-Fallback), **Klimatologie-Baseline**, erste Wochenmatrix **rein statistisch** mit Schwellen-Tabelle — **umgesetzt 23.09.2026: Tor T2 bestanden (39,5 % auf Brokerdaten, Struktur wie Bericht)** | erste belastbare Matrix |
 | **3 — Prognosemodell** ✅ | HAR auf ln(TR) + Wochentags-Dummies, Event-Features (NFP-Proxy ×1,24 / FOMC ×1,40 gemessen), GVZ-Historie (4.276 Tage), Walk-Forward über 850 Testtage, Platt-Skalierung — **Tor T3 bestanden 23.09.2026: B_har BSS +0,161** (Brier 0,244→0,205); Matrix zeigt P_stat + Modell-Range-Band | kalibrierte Prognose |
-| **4 — LLM-Schicht** | News-/Community-Destillation, Analytiker-Fusion mit Band + Treiber-Wasserfall, Reporter/PDF, Journal | vollständig erklärte Matrix |
+| **4 — LLM-Schicht** ✅ | News-RSS-Adapter (8 Quellen, Delta-Hash), Community (TradingView/Analysten/Kitco-Best-Effort), Destillation (glm-5.3-flash, JSON-validiert, Fail-Fast), **Analytiker-Fusion im ±10-pp-Band mit Pflichtbegründung** (Verstöße werden systemseitig abgewiesen + geloggt), Treiber-Wasserfall, Wochen-PDF, Postfach — **umgesetzt 23.09.2026: 246 News-Items (Delta-Prinzip), Fusion Δmax 3,0 pp ohne Verstoß, PDF 2 Seiten** | vollständig erklärte Matrix |
 | **5 — Quant-Feeds & Kalibrierung** | FRED/RealYield, COT, GLD → Klassifikator + Richtungsmodell, Isotonic-Rekalibrierung, Session-/Gap-Intraday-Update | bessere Kalibrierung + Richtung |
 | **6 — Betrieb & Qualität** | Verifikations-/Backtest-Agent, Track-Record-Seite, Plumes, Scout (Google/Bing/Tavily), Daemon + Zeitplan; optional GARCH/CARR, Myfxbook-Outlook (Account), Options-Skew | messbarer, selbstkalibrierender Betrieb |
 

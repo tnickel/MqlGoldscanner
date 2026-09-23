@@ -26,7 +26,7 @@ Dashboard, Gold-Akzente). Statistik zuerst, LLM gewichtet erklärt.
   getestete Whitelist); ein laufendes Terminal wird nie beendet. Ehrlicher
   User-Agent, keine Bot-Schutz-Umgehung, höfliche Abrufabstände.
 
-## Stand (Stufe 3 von 7 — 23.09.2026)
+## Stand (Stufe 4 von 7 — 23.09.2026)
 
 | ✅ | Baustein |
 |---|---|
@@ -34,30 +34,38 @@ Dashboard, Gold-Akzente). Statistik zuerst, LLM gewichtet erklärt.
 | ✅ | MetaTrader-5-Anbindung nativ (D1/H4/H1, Whitelist, nur lesend) |
 | ✅ | Plotly-Candlestick-Chart mit SMA 10/50/200 + Kennzahlen-Panel (ATR/RSI/TR Wilder) |
 | ✅ | GLM-Client mit Fehler-Taxonomie (1113/429·1302/finish_reason), Lauf- und Tagesbudget |
-| ✅ | **Wochenmatrix**: P(Bewegungstag) je Wochentag — Klimatologie mit Shrinkage UND P_stat aus dem HAR-Modell mit Delta-Anzeige, Schwelle B, Modell-Range-Band Q10–Q90, Warnstufen, Schwellen-Tabelle (1,0×/1,5×/2,0×) |
+| ✅ | **Wochenmatrix**: P je Wochentag — Klimatologie mit Shrinkage, P_stat aus dem HAR-Modell UND P_finale aus der KI-Fusion, Schwelle B, Modell-Range-Band Q10–Q90, Warnstufen, Schwellen-Tabelle |
 | ✅ | **Kalender-Adapter**: ForexFactory, BLS, BEA, Fed, TreasuryDirect + regelbasierte Termine (GC FND/LTD/Opex, Feiertage, DST) — Hash-Snapshot-Archiv (point-in-time) |
 | ✅ | **HAR-Prognosemodell** auf ln(TR/Close): HAR-Lags + Wochentags-Dummies, Walk-Forward-Rücktest (Brier/BSS/Log-Loss/Reliability, Platt-Skalierung), Tor-T3-Ampel im Dashboard |
 | ✅ | **Event-Multiplikatoren** aus Brokerdaten: NFP ×1,24 · FOMC ×1,40 · GC-Termin ×1,10 |
 | ✅ | **GVZ-Historie** (CBOE Gold Volatility Index, 4.276 Tage seit 2009) als IV-Feature |
+| ✅ | **News-Adapter (S4)**: 8 RSS-Quellen (FXStreet, Google-News EN/DE, Bing, FXEmpire, Investing) mit Gold-Filter, 7-Tage-Fenster und Delta-Prinzip (SHA-Dedup — unveränderte Items kosten keine Tokens) |
+| ✅ | **Community-Adapter (S4)**: TradingView-Ideas (Long/Short-Zählung + Level-Cluster), Analysten-Sentiment, Kitco-Survey (Best-Effort), Retail-Kontra-Flag ab 70 % Einseitigkeit |
+| ✅ | **Destillations- + Analytiker-Agent (S4)**: glm-5.3-flash destilliert News/Community zu belegten Treibern; glm-5.3 fusioniert P_stat + Events + Destillate im konfigurierbaren ±pp-Band mit Pflichtbegründung — Band-Verstöße werden systemseitig abgewiesen und geloggt; ungültige Antworten werden nie gespeichert (JSON-Validierung, Fail-Fast nach 3 Fehlern) |
+| ✅ | **Treiber-Wasserfall je Tag** im Dashboard + **Wochen-PDF** (reportlab) + Postfach für Prognoseänderungen |
 | ✅ | **Tagessicht**: Event-Zeitleiste (Europe/Berlin) mit Gold-Relevanz-Klassen und Dedup über Quellen |
 | ✅ | MQL5-Kalender-Exporter (`mql5/CalendarExport.mq5`) für Ist-Werte + Nasdaq-Fallback |
 | ✅ | Quellen-Launch-Check: 16 verifizierte Kern-URLs mit Typ-/Signaturprüfung |
-| ✅ | SQLite (versioniert), Audit-Journal, Prognose-Versionen (as_of) |
-| ✅ | 48 pytest-Ankertests (u. a. HAR-Parameter-Recovery, Brier/BSS-Anker, Kalibrierung, Kalender-Parsing, Kein-Look-ahead) |
+| ✅ | SQLite (versioniert, Schema v4: news_items/fusionen/meldungen), Audit-Journal mit vollem Prompt/Antwort je LLM-Schritt, Prognose-Versionen (as_of) |
+| ✅ | 69 pytest-Ankertests (u. a. HAR-Parameter-Recovery, Brier/BSS-Anker, Band-Disziplin, JSON-Validierung, PDF-Smoke, Kein-Look-ahead) |
 
 **Tor T2 bestanden:** eigene Klimatologie auf Brokerdaten (1.001 Tage Tickmill XAUUSD)
 = 41,2 % Bewegungstage (Bericht: ~43 % auf Futures) bei identischer Wochentags-Struktur
 (Mittwoch höchste Rate).
 
 **Tor T3 bestanden (23.09.2026):** HAR-Modell schlägt die wochentagsbewusste Klimatologie
-im Walk-Forward über 850 Testtage mit **BSS +0,161** (Brier 0,244 → 0,205). Damit ist der
-Weg für die LLM-Erklärungsschicht (S4) frei. Ehrlich dokumentiert: Platt-Skalierung bringt
-out-of-sample noch ≈ 0 (Kanten-Kalibrierung → S5), und Events/IV als zusätzliche
-Regressoren (C/D) lagen leicht unter der schlanken B-Variante.
+im Walk-Forward über 850 Testtage mit **BSS +0,161** (Brier 0,244 → 0,205). Ehrlich
+dokumentiert: Platt-Skalierung bringt out-of-sample noch ≈ 0 (Kanten-Kalibrierung → S5),
+und Events/IV als zusätzliche Regressoren (C/D) lagen leicht unter der schlanken B-Variante.
 
-**Roadmap** (`doc/02_stufenplan.md`): S4 LLM-Destillation/Fusion (Analytiker-Band ±10 pp)
-→ S5 Richtung & Quant-Feeds (COT, FRED, Isotonic-Kalibrierung) → S6 Daemon & Track-Record
-→ S7 Ausbau.
+**S4 live (23.09.2026):** erster LLM-Lauf über 246 neue News-Items und 30 TradingView-
+Ideen — die Fusion bewegte die Modellwahrscheinlichkeiten dezent und begründet
+(Δmax 3,0 pp, null Band-Verstöße; Treiber: FOMC-Redeflut, Claims, GC-Opex). **Tor T4**
+(LLM-Delta bringt messbaren Nutzen?) wird über die kommenden Wochen im Track-Record
+gemessen — bis dahin bleibt das Band konfigurierbar (Einstellungen → GLM).
+
+**Roadmap** (`doc/02_stufenplan.md`): S5 Richtung & Quant-Feeds (COT, FRED,
+Isotonic-Kalibrierung) → S6 Daemon & Track-Record (inkl. Tor-T4-Auswertung) → S7 Ausbau.
 
 ## Schnellstart
 
@@ -88,6 +96,10 @@ src/goldscanner/
   ├─ kennzahlen.py                TR/ATR/RSI/SMA — reiner Code, Ankertests
   ├─ klimatologie.py              Basisrate je Wochentag (Shrinkage), Schwelle B
   ├─ modell/                      HAR-Features/OLS/Backtest/Event-Multiplikatoren/GVZ
+  ├─ adapter/                     Kalender, News-RSS, Community (Deterministisch vorverdaut)
+  ├─ agenten/                     Destillation + Analytiker-Fusion (Band-Disziplin)
+  ├─ llm/                         GLM-Client + Prompt-Vorlagen (config/prompts/*.md)
+  ├─ bericht/                     Wochen-PDF (reportlab)
   ├─ wochenmatrix.py + wochenlauf.py   Matrix-Bau + gesteuerte Pipeline
   ├─ quellen_check.py             Wächter: Status + Content-Type + Signatur
   ├─ db.py / lock.py / config.py  SQLite, Lauf-Lock, Einstellungen

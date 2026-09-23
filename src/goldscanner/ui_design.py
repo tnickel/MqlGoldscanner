@@ -206,6 +206,21 @@ def _stylesheet() -> str:
     }}
     .gld-feed__line::before {{ content: "· "; color: #E8B84B; font-weight: 800; }}
 
+    /* Treiber-Wasserfall (S4): je Tag eine kompakte Balkenliste —
+       Breite = |Einfluss| relativ zum Band, Gold = auf, Rot = ab. */
+    .gld-wasserfall-liste {{ display: flex; flex-direction: column; gap: .28rem;
+                             margin: .3rem 0 .55rem; }}
+    .gld-wasserfall {{ display: flex; align-items: center; gap: .6rem; }}
+    .gld-wf-name {{ flex: 0 0 40%; font-size: .78rem; color: #94A3B8;
+                    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+    .gld-wf-balken {{ flex: 1 1 auto; height: 8px; border-radius: 99px;
+                      background: rgba(148, 163, 184, .16); overflow: hidden; }}
+    .gld-wf-balken i {{ display: block; height: 100%; border-radius: inherit;
+                        transition: width .5s ease; }}
+    .gld-wf-wert {{ flex: 0 0 auto; font-size: .78rem; font-weight: 700;
+                    color: #CBD5E1; font-variant-numeric: tabular-nums;
+                    min-width: 4.2rem; text-align: right; }}
+
     /* Actions: ein klarer Gold-Akzent, keine dekorative Bewegung. */
     button[kind="primary"], .stButton > button[type="primary"] {{
         background: #E8B84B !important;

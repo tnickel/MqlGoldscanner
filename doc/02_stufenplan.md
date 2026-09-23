@@ -1,22 +1,39 @@
-# MqlGoldscanner — Stufenplan (v1.3, 23.09.2026)
+# MqlGoldscanner — Stufenplan (v1.4, 23.09.2026)
 
 > **Technologie-Wechsel 23.09.2026:** Nach Nutzer-Entscheidung läuft die Umsetzung auf
-> **Python/Streamlit** (wie der MqlKiScanner), nicht mehr Java/JavaFX. **S1, S2 und S3
-> sind in Python fertig abgenommen** (S2: Tor T2 bestanden — eigene Klimatologie,
-> Abnahme-Wert 39,5 %; mit voller Historie (1.001 Tage) 41,2 % auf 970 Bewegungstagen
-> vs. ~43 % aus
-> dem Bericht bei identischer Wochentags-Struktur; UI im Browser visuell verifiziert).
-> Die Java-Inhalte der Stufenbeschreibungen unten sind historisch zu lesen.
+> **Python/Streamlit** (wie der MqlKiScanner), nicht mehr Java/JavaFX. **S1–S4 sind in
+> Python fertig abgenommen.** Die Java-Inhalte der Stufenbeschreibungen unten sind
+> historisch zu lesen.
+>
+> **S2 abgenommen (Tor T2 bestanden):** eigene Klimatologie, Abnahme-Wert 39,5 %; mit
+> voller Historie (1.001 Tage) 41,2 % auf 970 Bewegungstagen vs. ~43 % aus dem Bericht
+> bei identischer Wochentags-Struktur.
 >
 > **S3 abgenommen 23.09.2026 (Tor T3 BESTANDEN):** HAR auf ln(TR_rel) mit Walk-Forward
 > über 850 Testtage (Refit alle 5 Tage, expanding, MIN_TRAIN=120): **B_har BSS +0,161**
 > (Brier 0,2437 → 0,2046, Log-Loss 0,681 → 0,596) gegen die wochentagsbewusste
 > Klimatologie. Event-Multiplikatoren aus 1.001 Broker-Tagen: NFP ×1,24 (+10,5 pp
 > Bewegungswahrscheinlichkeit), FOMC ×1,40 (+9,4 pp), GC-Termin ×1,10 (neutral).
-> 48 pytest grün. Ehrliche Einschränkung: Platt-Skalierung bringt OOS ≈ 0 — die
-> Kanten sind noch nicht perfekt kalibriert (S5-Thema, Isotonic ab ~500 Beobachtungen);
-> C/D (Events/IV als Regressoren) lagen OOS leicht unter B — dokumentiert, Matrix
-> läuft bewusst mit B_har. Kein Look-ahead: Features nur bis t−1, point-in-time-Tests.
+> Ehrliche Einschränkung: Platt-Skalierung bringt OOS ≈ 0 — die Kanten sind noch nicht
+> perfekt kalibriert (S5-Thema, Isotonic ab ~500 Beobachtungen); C/D (Events/IV als
+> Regressoren) lagen OOS leicht unter B — dokumentiert, Matrix läuft bewusst mit B_har.
+> Kein Look-ahead: Features nur bis t−1, point-in-time-Tests.
+>
+> **S4 abgenommen 23.09.2026 (Tor T4 = laufende Beobachtung):** News-RSS-Adapter über
+> 8 Quellen (FXStreet news/analysis, Google-News EN/DE, Bing, FXEmpire news/forecasts,
+> Investing; Nasdaq-Feed 2026 Timeout → bewusst draußen) mit Gold-Relevanz-Filter,
+> 7-Tage-Fenster und **Delta-Prinzip** (SHA-Dedup; erster Lauf 246 neue Items, davon
+> 80 je Destillations-Aufruf). Community deterministisch vorverarbeitet (TradingView:
+> 8/11/11 Long/Short/Neutral + Level-Cluster 4.310/4.300/4.340; Analysten 35 Artikel;
+> Kitco-Best-Effort; Retail-Kontra-Flag ab 70 % Einseitigkeit). Destillation
+> glm-5.3-flash (31.812 Token für 80 Items), Fusion glm-5.3: **Δmax 3,0 pp, null
+> Band-Verstöße**, je Tag Begründung + Treiber-Wasserfall (FOMC-Reden, Claims,
+> GC-Opex). Wochen-PDF (reportlab, 2 Seiten) + Postfach für Prognoseänderungen ≥
+> Schwelle. 69 pytest grün (u. a. Band-Disziplin, JSON-Validierung, Fail-Fast nach 3
+> Fehlversuchen, PDF-Smoke). **Lektion:** GLM-5.x-Reasoning-Modelle brauchen hohe
+> max_tokens (16k/12k) — finish_reason=length warf anfangs alles weg.
+> **Tor T4 wird über kommende Wochen im Track-Record gemessen** (S6): Bringt das
+> LLM-Delta Brier-Mehrwert? Systematisch „immer +10 pp" → Band straffen.
 
 Verfeinerung von §13 des Konzepts (`doc/00_konzept.md`). Ziel: Umsetzung in **7 Stufen**,
 die jeweils für sich abgeschlossen, testbar und **nutzbar** sind — die App bleibt nach

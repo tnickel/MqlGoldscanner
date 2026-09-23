@@ -4,4 +4,5 @@ pandas>=2.0
 plotly>=6.0
 MetaTrader5>=5.0.45
 beautifulsoup4>=4.12
+reportlab>=4.0
 pytest>=8.0

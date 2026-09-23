@@ -62,6 +62,11 @@ DEFAULT_SETTINGS: dict = {
     # Wochenmatrix (S2)
     "matrix_fenster": 13,          # Wochen für die Schwelle B je Wochentag
     "matrix_k": 1.0,               # Bewegungstag: TR > k × Ø-TR des Wochentags
+    # LLM-Schicht (S4)
+    "llm_band_pp": 10.0,           # Analytiker darf P_stat nur um ± diese pp verschieben
+    "llm_melde_schwelle_pp": 10.0, # Prognoseänderung, ab der eine Meldung entsteht
+    "news_fenster_tage": 7,        # RSS-Items älter als das werden ignoriert
+    "news_max_items_llm": 80,      # Obergrenze je Destillations-Aufruf
 }
 
 

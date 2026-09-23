@@ -67,6 +67,23 @@ with rechts:
                                      step=100_000)
         timeout = st.number_input("Timeout (Sekunden)", min_value=30,
                                   value=int(settings.get("llm_timeout_s", 300)), step=30)
+        st.caption("**Analytiker-Disziplin (S4)** — das LLM verschiebt die "
+                   "Modellwahrscheinlichkeit nur in diesem Band:")
+        band_pp = st.slider("Band um P_stat (Prozentpunkte)", min_value=0, max_value=30,
+                            value=int(settings.get("llm_band_pp", 10)), step=1,
+                            help="0 = LLM darf nichts verschieben (nur erklären). "
+                                 "Verstöße gegen das Band werden automatisch abgewiesen.")
+        melde_schwelle = st.slider("Meldung bei Prognoseänderung (pp)", min_value=2,
+                                   max_value=30,
+                                   value=int(settings.get("llm_melde_schwelle_pp", 10)),
+                                   step=1,
+                                   help="Ändert sich P_finale eines Tages zwischen zwei "
+                                        "Läufen um mindestens diesen Wert, landet eine "
+                                        "Meldung im Postfach.")
+        news_fenster = st.number_input("News-Fenster (Tage)", min_value=2, max_value=21,
+                                       value=int(settings.get("news_fenster_tage", 7)),
+                                       step=1,
+                                       help="Ältere RSS-Items werden ignoriert.")
     with st.container(border=True):
         st.subheader("Netz & Höflichkeit", width="content")
         kontakt = st.text_input("Kontakt-Adresse im User-Agent (empfohlen)",
@@ -99,6 +116,9 @@ if st.button("Alle Einstellungen speichern", type="primary", icon=":material/sav
         "llm_max_total_tokens": int(budget_lauf),
         "llm_token_budget_tag": int(budget_tag),
         "llm_timeout_s": int(timeout),
+        "llm_band_pp": float(band_pp),
+        "llm_melde_schwelle_pp": float(melde_schwelle),
+        "news_fenster_tage": int(news_fenster),
         "kontakt_fuer_useragent": kontakt.strip(),
     })
     st.toast("Gespeichert — Sidebar-Status aktualisiert sich beim nächsten Klick.",

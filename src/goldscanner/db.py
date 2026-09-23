@@ -13,7 +13,7 @@ from pathlib import Path
 
 from . import config
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
@@ -52,6 +52,21 @@ CREATE TABLE IF NOT EXISTS prognose_versionen (
 CREATE TABLE IF NOT EXISTS quant_series (
     tag TEXT NOT NULL, schluessel TEXT NOT NULL, wert REAL NOT NULL,
     PRIMARY KEY (tag, schluessel));
+CREATE TABLE IF NOT EXISTS news_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    quelle TEXT NOT NULL, url TEXT NOT NULL, titel TEXT NOT NULL,
+    autor TEXT, veroeffentlicht TEXT, geholt_am TEXT NOT NULL,
+    dedup_hash TEXT NOT NULL UNIQUE, gold_relevanz INTEGER,
+    zusammenfassung TEXT, destilliert INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS fusionen (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, as_of TEXT NOT NULL,
+    woche TEXT NOT NULL, modell TEXT NOT NULL, band_pp REAL NOT NULL,
+    inhalt TEXT NOT NULL, ok INTEGER NOT NULL DEFAULT 1,
+    delta_max_pp REAL, verstoesse INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS meldungen (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, zeit TEXT NOT NULL,
+    woche TEXT NOT NULL, art TEXT NOT NULL, text TEXT NOT NULL,
+    gelesen INTEGER NOT NULL DEFAULT 0);
 """
 
 
@@ -269,6 +284,108 @@ class Db:
                 (_jetzt(), woche, modell, inhalt))
             self._con.commit()
             return int(cur.lastrowid)
+
+    def prognose_letzte(self, woche: str | None = None) -> dict | None:
+        """Jüngste gespeicherte Matrix (JSON), je Woche oder gesamt —
+        bevorzugt die Version mit LLM-Fusion."""
+        sql = ("SELECT * FROM prognose_versionen"
+               + (" WHERE woche=?" if woche else "")
+               + " ORDER BY id DESC LIMIT 10")
+        with self._lock:
+            zeilen = self._con.execute(sql, (woche,) if woche else ()).fetchall()
+        for zeile in zeilen:                  # neueste zuerst
+            if "llm_fusion" in zeile["modell"]:
+                return dict(zeile)
+        return dict(zeilen[0]) if zeilen else None
+
+    # ── News-Items (S4: Delta-Prinzip über Dedup-Hash) ──────────────────
+    def news_speichern(self, items: list[dict]) -> int:
+        """Neue News-Items anlegen (INSERT OR IGNORE auf dedup_hash).
+        Rückgabe: Anzahl NEUER Zeilen."""
+        with self._lock:
+            cur = self._con.executemany(
+                "INSERT OR IGNORE INTO news_items(quelle,url,titel,autor,veroeffentlicht,"
+                "geholt_am,dedup_hash,gold_relevanz,zusammenfassung) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
+                [(i["quelle"], i["url"], i["titel"], i.get("autor"),
+                  i.get("veroeffentlicht"), _jetzt(), i["dedup_hash"],
+                  i.get("gold_relevanz", 1), i.get("zusammenfassung"))
+                 for i in items])
+            self._con.commit()
+            return cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+
+    def news_offen(self, limit: int = 80) -> list[dict]:
+        """Noch nicht destillierte Items, älteste zuerst (stabile Prompt-Reihenfolge)."""
+        with self._lock:
+            zeilen = self._con.execute(
+                "SELECT * FROM news_items WHERE destilliert=0 "
+                "ORDER BY veroeffentlicht, id LIMIT ?", (limit,)).fetchall()
+        return [dict(r) for r in zeilen]
+
+    def news_destilliert_markieren(self, ids: list[int]) -> None:
+        if not ids:
+            return
+        with self._lock:
+            self._con.executemany(
+                "UPDATE news_items SET destilliert=1 WHERE id=?",
+                [(int(i),) for i in ids])
+            self._con.commit()
+
+    def news_anzahl(self, offen: bool = False) -> int:
+        sql = "SELECT COUNT(*) FROM news_items" + (" WHERE destilliert=0" if offen else "")
+        with self._lock:
+            return self._con.execute(sql).fetchone()[0]
+
+    # ── LLM-Fusionen (S4: Grundlage für Tor T4 — LLM-Delta-Nutztwert) ───
+    def fusion_speichern(self, woche: str, modell: str, band_pp: float,
+                         inhalt: str, ok: bool, delta_max_pp: float | None,
+                         verstoesse: int) -> int:
+        with self._lock:
+            cur = self._con.execute(
+                "INSERT INTO fusionen(as_of,woche,modell,band_pp,inhalt,ok,"
+                "delta_max_pp,verstoesse) VALUES (?,?,?,?,?,?,?,?)",
+                (_jetzt(), woche, modell, float(band_pp), inhalt,
+                 1 if ok else 0, delta_max_pp, int(verstoesse)))
+            self._con.commit()
+            return int(cur.lastrowid)
+
+    def fusion_letzte(self, woche: str | None = None) -> dict | None:
+        """Jüngste Fusion (gesamt oder je Woche) — für Delta-Meldungen."""
+        sql = ("SELECT * FROM fusionen" + (" WHERE woche=?" if woche else "")
+               + " ORDER BY id DESC LIMIT 1")
+        with self._lock:
+            zeile = self._con.execute(sql, (woche,) if woche else ()).fetchone()
+        return dict(zeile) if zeile else None
+
+    def fusion_vorherige(self, woche: str) -> dict | None:
+        """Zweitjüngste Fusion derselben Woche (vor der gerade gespeicherten)
+        — Vergleichsbasis für Prognoseänderungs-Meldungen."""
+        with self._lock:
+            zeile = self._con.execute(
+                "SELECT * FROM fusionen WHERE woche=? "
+                "ORDER BY id DESC LIMIT 1 OFFSET 1", (woche,)).fetchone()
+        return dict(zeile) if zeile else None
+
+    # ── Postfach (S4: Meldungen bei Prognoseänderung) ───────────────────
+    def meldung_speichern(self, woche: str, art: str, text: str) -> int:
+        with self._lock:
+            cur = self._con.execute(
+                "INSERT INTO meldungen(zeit,woche,art,text) VALUES (?,?,?,?)",
+                (_jetzt(), woche, art, text))
+            self._con.commit()
+            return int(cur.lastrowid)
+
+    def meldungen(self, nur_offene: bool = False, limit: int = 30) -> list[dict]:
+        sql = ("SELECT * FROM meldungen" + (" WHERE gelesen=0" if nur_offene else "")
+               + " ORDER BY id DESC LIMIT ?")
+        with self._lock:
+            zeilen = self._con.execute(sql, (limit,)).fetchall()
+        return [dict(r) for r in zeilen]
+
+    def meldung_gelesen_markieren(self, id_: int) -> None:
+        with self._lock:
+            self._con.execute("UPDATE meldungen SET gelesen=1 WHERE id=?", (id_,))
+            self._con.commit()
 
     def close(self) -> None:
         with self._lock:

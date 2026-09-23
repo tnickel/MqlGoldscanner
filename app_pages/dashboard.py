@@ -2,6 +2,7 @@
 """Dashboard — Stufe 2: Wochenmatrix (Klimatologie), Schwellen-Tabelle, Status."""
 from __future__ import annotations
 
+import json
 import sys
 from datetime import date, datetime
 from pathlib import Path
@@ -20,26 +21,29 @@ from goldscanner.wochenlauf import starten as wochenlauf_starten
 from goldscanner.wochenmatrix import baue_matrix
 
 page_header(
-    "Stufe 2/3 · Klimatologie + HAR-Modell",
+    "Stufe 2/3/4 · Statistik + Modell + KI-Erklärung",
     "Gold-Bewegungswahrscheinlichkeit je Wochentag",
     "Hauptziel: pro Tag **Wahrscheinlichkeit**, **erwartete Range** und (ab S5) "
     "**Richtung**. Die Matrix zeigt P_stat aus dem HAR-Modell (HAR-Lags + Events + "
-    "GVZ) neben der Klimatologie-Basisrate; Schwelle B aus den letzten 13 Wochen "
-    "desselben Wochentags (point-in-time, kein Look-ahead). Tor T3: nur Modelle mit "
-    "BSS > 0 gegen die Basisrate kommen auf die Matrix.",
+    "GVZ) neben der Klimatologie-Basisrate; der Analytiker-Agent verschiebt P im "
+    "engeren Band (±{band} pp) nur mit Begründung. Tor T3: nur Modelle mit "
+    "BSS > 0 gegen die Basisrate kommen auf die Matrix.".format(
+        band=int(config.load_settings().get("llm_band_pp", 10))),
 )
 
+_llm_ok = bool((st.session_state.get("matrix") or {}).get("llm", {}).get("ok"))
 zeige_stepper([
     {"nr": 1, "title": "Gerüst & Kurse", "status": "complete", "meta": "App · MT5 · GLM"},
     {"nr": 2, "title": "Klimatologie-Matrix", "status": "complete", "meta": "Kalender · Basisrate"},
     {"nr": 3, "title": "Kalibriertes Modell", "status": "complete" if (
         st.session_state.get("matrix") or {}).get("modell_info", {}).get("tor_t3_bestanden")
         else "pending", "meta": "HAR · Events · GVZ"},
-    {"nr": 4, "title": "LLM-Erklärungen", "status": "pending", "meta": "Treiber · Begründung · PDF"},
+    {"nr": 4, "title": "LLM-Erklärungen", "status": "complete" if _llm_ok else "pending",
+     "meta": "Treiber · Begründung · PDF"},
     {"nr": 5, "title": "Richtung & Quant", "status": "pending", "meta": "P(hoch) · COT · FRED"},
     {"nr": 6, "title": "Betrieb & Track-Record", "status": "pending", "meta": "Daemon · BSS · Scout"},
     {"nr": 7, "title": "Ausbau", "status": "pending", "meta": "optional"},
-], overall=3 / 7)
+], overall=(4 if _llm_ok else 3) / 7)
 
 settings = config.load_settings()
 
@@ -61,7 +65,8 @@ with rechts:
 
 if laufen:
     from goldscanner.ui_design import aktivitaets_banner
-    banner = aktivitaets_banner("Wochenlauf: Kurse → Kalender (5 Quellen) → Matrix …")
+    banner = aktivitaets_banner(
+        "Wochenlauf: Kurse → Kalender → GVZ → Matrix → News → KI-Fusion …")
     protokoll = wochenlauf_starten(hole_db(), settings)
     banner.empty()
     st.session_state["matrix"] = protokoll["matrix_objekt"]
@@ -72,15 +77,33 @@ if laufen:
                   + ", ".join(f"{tf}={n}" for tf, n in protokoll["kurse"]["bars"].items()))
     else:
         k_info = "DB-Fallback (" + str(protokoll["kurse"].get("grund", ""))[:60] + ")"
+    llm = protokoll.get("llm", {})
+    llm_info = ""
+    if llm.get("ok"):
+        fusion = llm.get("fusion", {})
+        llm_info = (f" · KI-Fusion ok (Δmax {fusion.get('delta_max_pp', 0):.0f} pp, "
+                    f"{llm.get('tokens', 0):,} Token)".replace(",", "."))
+        if protokoll.get("pdf", {}).get("ok"):
+            llm_info += " · PDF erzeugt"
+    else:
+        llm_info = " · KI-Fusion aus (" + str(llm.get("grund", ""))[:60] + ")"
     st.toast(f"Wochenlauf fertig · Kalender: {len(kal) - len(fehler)}/{len(kal)} Quellen"
              + (f" (Fehler: {', '.join(fehler)})" if fehler else ""),
              icon=":material/check_circle:")
-    st.caption(f"Kurse: {k_info}")
+    st.caption(f"Kurse: {k_info}{llm_info}")
 
 if aktualisieren:
     st.session_state["matrix"] = baue_matrix(hole_db(), settings)
 
 matrix = st.session_state.get("matrix")
+if not matrix:
+    # Letzte gespeicherte Matrix zeigen (bevorzugt die Version mit LLM-Fusion)
+    letzte = hole_db().prognose_letzte()
+    if letzte:
+        try:
+            matrix = json.loads(letzte["inhalt"])
+        except (json.JSONDecodeError, TypeError):
+            matrix = None
 if matrix:
     st.divider()
     basis = matrix["basis"]
@@ -94,22 +117,36 @@ if matrix:
 
     _WARNFARBEN = {"ruhig": "#38BDF8", "normal": "#94A3B8", "erhöht": "#E8B84B",
                    "hoch": "#FB923C", "extrem": "#F43F5E"}
+    _RICHTUNGS_ICON = {"hoch": "▲", "runter": "▼", "neutral": "▬"}
     modell_info = matrix.get("modell_info") or {}
+    llm_sektion = matrix.get("llm") or {}
+    fusion_je_tag = {t["datum"]: t for t in llm_sektion.get("tage", [])}
     spalten = st.columns(5, gap="small")
     for spalte, tag in zip(spalten, matrix["tage"]):
         with spalte:
             with st.container(border=True):
                 d = datetime.fromisoformat(tag["datum"])
                 st.markdown(f"**{tag['wochentag']}** · {d.strftime('%d.%m.')}")
+                f = fusion_je_tag.get(tag["datum"])
                 p = tag["p_stat"] if tag.get("p_stat") is not None else tag["p"]
                 p_klima = tag.get("p_klima")
                 delta = (p - p_klima) if (p is not None and p_klima is not None) else None
-                st.metric("P(Bewegung)", "–" if p is None else f"{p * 100:.0f} %",
-                          None if delta is None else f"{delta * 100:+.0f} pp vs. Klima",
-                          border=True, label_visibility="collapsed")
-                if p is not None:
-                    st.progress(min(p, 1.0))
-                if p_klima is not None and p is not None:
+                if f:
+                    p_anzeige = f["p_finale_pct"] / 100.0
+                    st.metric("P(Bewegung)", f"{p_anzeige * 100:.0f} %",
+                              f"{f['abweichung_pp']:+.0f} pp KI-Anpassung",
+                              border=True, label_visibility="collapsed")
+                else:
+                    st.metric("P(Bewegung)", "–" if p is None else f"{p * 100:.0f} %",
+                              None if delta is None else f"{delta * 100:+.0f} pp vs. Klima",
+                              border=True, label_visibility="collapsed")
+                if p is not None or f:
+                    st.progress(min(p_anzeige if f else (p or 0.0), 1.0))
+                if f:
+                    st.caption(f"Modell: {f['basis_pct']:.0f} % · "
+                               f"{_RICHTUNGS_ICON.get(f['richtung'], '▬')} "
+                               f"{f['richtung']} ({f['konfidenz']})")
+                elif p_klima is not None and p is not None:
                     st.caption(f"Klimatologie: {p_klima * 100:.0f} %"
                                + (" · Modell" if tag.get("p_stat") is not None else ""))
                 farbe = _WARNFARBEN.get(tag["warnstufe"], "#94A3B8")
@@ -170,6 +207,66 @@ if matrix:
                 st.markdown("**Gemessene Event-Multiplikatoren** (historisch, "
                             "NFP = erster-Freitag-Proxy, FOMC aus Fed-Historie):")
                 st.dataframe(mult, hide_index=True, width="stretch")
+
+    if llm_sektion.get("ok"):
+        band = llm_sektion.get("band_pp", 10)
+        with st.expander(
+                f"KI-Analyse (Stufe 4) — Analytiker-Fusion im ±{band:.0f}-pp-Band · "
+                f"Δmax {llm_sektion.get('delta_max_pp', 0):.0f} pp", expanded=True):
+            if llm_sektion.get("zusammenfassung"):
+                st.markdown(llm_sektion["zusammenfassung"])
+            fusion_je_tag_llm = {t["datum"]: t for t in llm_sektion.get("tage", [])}
+            for t_matrix in matrix["tage"]:
+                f = fusion_je_tag_llm.get(t_matrix["datum"])
+                if not f:
+                    continue
+                st.markdown(f"**{t_matrix['wochentag']} {t_matrix['datum']}** — "
+                            f"P_finale **{f['p_finale_pct']:.0f} %** "
+                            f"(Modell {f['basis_pct']:.0f} %, "
+                            f"Δ {f['abweichung_pp']:+.1f} pp, "
+                            f"{_RICHTUNGS_ICON.get(f['richtung'], '▬')} {f['richtung']})")
+                if f.get("begruendung"):
+                    st.caption(f["begruendung"])
+                if f.get("treiber"):
+                    balken = []
+                    for tr in f["treiber"]:
+                        breite = min(abs(tr["einfluss_pp"]) / max(band, 1.0), 1.0) * 100
+                        farbe = {"auf": "#E8B84B", "ab": "#F43F5E"}.get(
+                            tr["richtung"], "#94A3B8")
+                        balken.append(
+                            f'<div class="gld-wasserfall">'
+                            f'<span class="gld-wf-name">{tr["name"][:44]}</span>'
+                            f'<span class="gld-wf-balken"><i style="width:{breite:.0f}%;'
+                            f'background:{farbe}"></i></span>'
+                            f'<span class="gld-wf-wert">{tr["einfluss_pp"]:+.1f} pp</span>'
+                            f'</div>')
+                    st.html('<div class="gld-wasserfall-liste">'
+                            + "".join(balken) + "</div>")
+            if llm_sektion.get("verstoesse"):
+                st.warning(f"**{len(llm_sektion['verstoesse'])} Band-Verstoß/Verstöße** "
+                           "vom System abgewiesen (Tag fiel auf die Modellwahrscheinlichkeit): "
+                           + "; ".join(llm_sektion["verstoesse"][:4]))
+            else:
+                st.caption("Band-Disziplin eingehalten — keine Abweisungen.")
+            if llm_sektion.get("risiken"):
+                st.markdown("**Risiken:** " + " · ".join(llm_sektion["risiken"]))
+            if llm_sektion.get("kontra_hinweis"):
+                st.caption(f"Kontra-Hinweis: {llm_sektion['kontra_hinweis']}")
+            pdf_pfad = (config.REPORTS_DIR /
+                        f"wochenbericht_{matrix['woche']}.pdf")
+            if pdf_pfad.exists():
+                with open(pdf_pfad, "rb") as fh:
+                    st.download_button(
+                        "Wochenbericht als PDF", fh.read(),
+                        file_name=pdf_pfad.name, mime="application/pdf",
+                        icon=":material/picture_as_pdf:")
+    elif matrix.get("protokoll_llm") is not None and not matrix["protokoll_llm"].get("llm_ok"):
+        with st.expander("KI-Analyse (Stufe 4) — nicht verfügbar"):
+            st.info("Die LLM-Fusion lief beim letzten Wochenlauf nicht mit "
+                    "(kein GLM-Key, Budget erschöpft oder wiederholte ungültige "
+                    "Antworten). Die Matrix bleibt rein statistisch — sie lügt "
+                    "nie, sie schweigt nur. **„Wochenlauf starten“** erneut "
+                    "ausführen, sobald der Grund behoben ist.")
 else:
     st.info("Noch keine Matrix in dieser Sitzung. **„Wochenlauf starten“** holt Kurse "
             "und Kalender (ForexFactory, BLS, BEA, Fed, Treasury, Regeltermine) und "
@@ -234,18 +331,28 @@ with links:
                   for z in hole_db().letzte_schritte(6)]
         status_feed(zeilen)
 with rechts:
+    db_fuer_postfach = hole_db()
+    offene_meldungen = db_fuer_postfach.meldungen(nur_offene=True)
+    if offene_meldungen:
+        with st.container(border=True):
+            st.subheader(f"Postfach · {len(offene_meldungen)} neu", width="content")
+            for m in offene_meldungen[:5]:
+                st.markdown(f"· **{m['zeit'][:16].replace('T', ' ')}** — {m['text']}")
+            if st.button("Alle als gelesen markieren", icon=":material/done_all:"):
+                for m in offene_meldungen:
+                    db_fuer_postfach.meldung_gelesen_markieren(m["id"])
+                st.rerun()
     with st.container(border=True):
         st.subheader("So geht es weiter", width="content")
         st.markdown(
-            "**S3 — Prognosemodell**  \n"
-            "HAR auf ln(TR), gemessene Event-Multiplikatoren, GVZ/iv30 Expected Move, "
-            "Walk-Forward mit Brier-Skill-Score. **Tor T3:** erst wenn BSS > 0 gegen "
-            "diese Basisrate stabil ist, folgt die LLM-Schicht.\n\n"
-            "**S4 — LLM-Erklärungen**  \n"
-            "News-/Community-Destillation, Analytiker im ±10-pp-Band, Treiber-"
-            "Wasserfall, Wochen-PDF.\n\n"
             "**S5 — Richtung & Quant-Feeds**  \n"
-            "Richtungsmodell P(hoch), COT/GLD/FRED, Intraday-Update.")
+            "Richtungsmodell P(hoch), COT/GLD/FRED, Isotonic-Kalibrierung "
+            "(die Kanten sind noch nicht perfekt kalibriert — Platt brachte OOS "
+            "≈ 0).\n\n"
+            "**S6 — Betrieb & Selbstverbesserung**  \n"
+            "Daemon, Track-Record, URL-Scout, MT5-Export der Prognosen.\n\n"
+            "**Tor T4:** Nach einigen Wochen wird gemessen, ob das LLM-Delta "
+            "(die KI-Anpassungen) historisch Mehrwert bringt — sonst Band auf 0.")
     with st.container(border=True):
         st.subheader("Jetzt sinnvoll", width="content")
         st.markdown(
