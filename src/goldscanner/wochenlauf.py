@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 
-from . import secrets_store
+from . import config, secrets_store
 from .adapter import community as community_adapter
 from .adapter import kalender
 from .adapter import news as news_adapter
@@ -28,7 +28,6 @@ def _client_bauen(settings: dict, db) -> GlmClient | None:
     """Client nur mit Key; Endpunkt/Modelle aus den Einstellungen."""
     if not secrets_store.get_secret("glm_api_key"):
         return None
-    from . import config
     return GlmClient(
         model_stufe1=settings.get("model_stufe1", config.MODEL_STUFE1),
         model_stufe2=settings.get("model_stufe2", config.MODEL_STUFE2),
