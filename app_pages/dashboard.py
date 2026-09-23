@@ -178,27 +178,30 @@ def _lauf_anzeige():
 
 
 # ── Übersicht: der Wochenlauf als Baum (was alles zu tun ist) ─────────────
-with st.container(border=True):
-    Kopf_links, kopf_i = st.columns([6, 0.35], gap="small",
-                                    vertical_alignment="center")
-    with Kopf_links:
-        st.markdown("**So ist der Wochenlauf aufgebaut** — Datenquellen oben "
-                    "laufen zusammen; was gold leuchtet, arbeitet gerade. "
-                    "Die Kette darüber zeigt während eines Laufs den "
-                    "**Fortschritt** (Reihenfolge), dieser Baum zeigt die "
-                    "**Stufen und ihr Zusammenspiel** — derselbe Lauf, zwei "
-                    "Blickwinkel.")
-    with kopf_i:
-        _info_button("wochenlauf", kkey="baum")
-    zeige_agenten_baum(_baum_status(lauf_zustand.lesen()))
-    st.caption("Grau = wartet · Gold (pulsierend) = läuft gerade · "
-               "Grün = erledigt · **violettes „KI“-Badge = hier arbeitet ein "
-               "Sprachmodell (GLM)**. Links rechnet reiner Code — die "
-               "Statistik-Engine ist bewusst KI-frei („Engine rechnet, LLM "
-               "zitiert“).")
+# Während eines Laufs zeigt das Live-Fenster denselben Baum mit Status —
+# die statische Übersicht würde ihn doppeln und bleibt deshalb versteckt.
+_laeuft_gerade = lauf_zustand.laeuft()
+if not _laeuft_gerade:
+    with st.container(border=True):
+        Kopf_links, kopf_i = st.columns([6, 0.35], gap="small",
+                                        vertical_alignment="center")
+        with Kopf_links:
+            st.markdown("**So ist der Wochenlauf aufgebaut** — Datenquellen oben "
+                        "laufen zusammen; was gold leuchtet, arbeitet gerade. "
+                        "Die Kette darüber zeigt während eines Laufs den "
+                        "**Fortschritt** (Reihenfolge), dieser Baum zeigt die "
+                        "**Stufen und ihr Zusammenspiel** — derselbe Lauf, zwei "
+                        "Blickwinkel.")
+        with kopf_i:
+            _info_button("wochenlauf", kkey="baum")
+        zeige_agenten_baum(_baum_status(lauf_zustand.lesen()))
+        st.caption("Grau = wartet · Gold (pulsierend) = läuft gerade · "
+                   "Grün = erledigt · **violettes „KI“-Badge = hier arbeitet ein "
+                   "Sprachmodell (GLM)**. Links rechnet reiner Code — die "
+                   "Statistik-Engine ist bewusst KI-frei („Engine rechnet, LLM "
+                   "zitiert“).")
 
 links, mitte, rechts = st.columns([1, 1, 2.2], vertical_alignment="center")
-_laeuft_gerade = lauf_zustand.laeuft()
 with links:
     laufen = st.button("Wochenlauf starten", type="primary",
                        icon=":material/rocket_launch:",

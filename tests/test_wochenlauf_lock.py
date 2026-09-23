@@ -18,26 +18,31 @@ sys.path.insert(0, str(ROOT / "src"))
 import goldscanner.wochenlauf as wochenlauf  # noqa: E402
 
 
-def test_starten_lock_pfad_ohne_nameerror(monkeypatch):
+def test_starten_lock_pfad_ohne_nameerror(monkeypatch, tmp_path):
     gesehen = []
 
     def fake_intern(db, settings, fortschritt=None):
         gesehen.append(fortschritt)
         return {"ok": True, "fake": True}
 
+    # Hermetisch: eigenes Daten-Verzeichnis statt dem echten data/-Ordner,
+    # damit ein zeitgleich laufender ECHTER Wochenlauf (GUI oder Daemon)
+    # den Test nicht sperren kann.
+    monkeypatch.setattr(wochenlauf.config, "DATA_DIR", tmp_path)
     monkeypatch.setattr(wochenlauf, "_starten_intern", fake_intern)
     ergebnis = wochenlauf.starten(None, {})
     assert ergebnis == {"ok": True, "fake": True}
     assert gesehen == [None]                 # Callback optional, Lauf läuft
 
 
-def test_starten_reicht_fortschritt_durch(monkeypatch):
+def test_starten_reicht_fortschritt_durch(monkeypatch, tmp_path):
     gesehen = []
 
     def fake_intern(db, settings, fortschritt=None):
         gesehen.append(fortschritt)
         return {"ok": True}
 
+    monkeypatch.setattr(wochenlauf.config, "DATA_DIR", tmp_path)
     monkeypatch.setattr(wochenlauf, "_starten_intern", fake_intern)
     callback = lambda station, text=None: None
     wochenlauf.starten(None, {}, fortschritt=callback)
