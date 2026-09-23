@@ -1,12 +1,26 @@
 @echo off
-rem MqlGoldscanner starten (Streamlit, Vorbild-Architektur MqlKiScanner).
-rem Browser oeffnet sich automatisch; Fenster offen lassen (beendet die App).
+rem MqlGoldscanner starten (Streamlit).
+rem Das Fenster offen lassen = App laeuft; Fenster schliessen beendet die App.
+rem Der Browser oeffnet sich automatisch (http://localhost:8505).
 chcp 65001 >nul
 cd /d "%~dp0"
-where streamlit >nul 2>nul
+
+where python >nul 2>nul
 if errorlevel 1 (
-    echo Streamlit nicht gefunden. Bitte 'pip install -r requirements.txt' ausfuehren.
+    echo Python nicht gefunden. Bitte Python 3.12+ installieren und PATH setzen.
     pause
     exit /b 1
 )
-streamlit run streamlit_app.py --server.port 8505 --browser.gatherUsageStats false
+
+rem python -m streamlit ist robuster als direkt "streamlit"
+rem (funktioniert auch, wenn das Scripts-Verzeichnis nicht im PATH liegt).
+python -m streamlit run streamlit_app.py --server.port 8505 --browser.gatherUsageStats false
+if errorlevel 1 (
+    echo.
+    echo Start fehlgeschlagen. Vermutlich fehlen Pakete - bitte ausfuehren:
+    echo     pip install -r requirements.txt
+    echo.
+    echo Ist die App bereits in einem anderen Fenster gestartet? Dann dieses
+    echo Fenster schliessen und im Browser http://localhost:8505 oeffnen.
+    pause
+)
