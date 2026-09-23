@@ -1,11 +1,15 @@
-# MqlGoldscanner — Stufenplan (v1.1, 23.09.2026)
+# MqlGoldscanner — Stufenplan (v1.2, 23.09.2026)
 
 > **Technologie-Wechsel 23.09.2026:** Nach Nutzer-Entscheidung läuft die Umsetzung auf
-> **Python/Streamlit** (wie der MqlKiScanner), nicht mehr Java/JavaFX. Stufe S1 ist in
-> Python fertig abgenommen (19 pytest grün, MT5 live, GLM-Ping OK, Quellen-Check 16/16,
-> Design im Browser visuell verifiziert). Die Java-Inhalte der Stufenbeschreibungen
-> unten (JavaFX, Maven, Bridge) sind historisch zu lesen; Funktionsumfang und Abnahmen
-> gelten unverändert. Java-Prototyp: `archiv/java-prototyp/`.
+> **Python/Streamlit** (wie der MqlKiScanner), nicht mehr Java/JavaFX. **S1 und S2 sind
+> in Python fertig abgenommen** (S2: 37 pytest grün, Live-Wochenlauf über alle
+> Kalender-Quellen, Tor T2 bestanden — eigene Klimatologie 39,5 % vs. ~43 % aus dem
+> Bericht bei identischer Wochentags-Struktur, UI im Browser visuell verifiziert).
+> Die Java-Inhalte der Stufenbeschreibungen unten sind historisch zu lesen.
+>
+> **Bekannt aus S2:** BLS liefert HTTP 403, wenn der User-Agent KEINE Kontakt-Adresse
+> enthält (verifiziert: mit Suffix 200, ohne 403) → Einstellungen → Netz → Kontakt
+> eintragen. Bis dahin liefert ForexFactory die NFP/CPI-Zeiten identisch.
 
 Verfeinerung von §13 des Konzepts (`doc/00_konzept.md`). Ziel: Umsetzung in **7 Stufen**,
 die jeweils für sich abgeschlossen, testbar und **nutzbar** sind — die App bleibt nach

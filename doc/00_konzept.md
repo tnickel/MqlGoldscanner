@@ -496,7 +496,7 @@ MqlGoldscanner/
 | Phase | Inhalt | Ergebnis |
 |---|---|---|
 | **1 — Gerüst & Kurse** ✅ | Streamlit-App (8 Bereiche, KiScanner-Design in Gold), Config+Secrets+SQLite, GlmClient m. Fehler-Taxonomie+Budget, MT5 nativ (Kurse D1/H4/H1), Plotly-Candlestick-Chart, Quellen-Launch-Check — **umgesetzt am 23.09.2026 (Python-Neubau nach Nutzer-Entscheidung)** | App läuft, Kurse sichtbar |
-| **2 — Statistik zuerst** | Kalender-Adapter + Regeltermine + Actuals (MQL5-Exporter), Snapshot-Archiv, Kennzahlen, **Klimatologie-Baseline**, HAR-Modell, erste Wochenmatrix **rein statistisch** (ohne LLM) mit Schwellen-Tabelle und Range-Band | erste belastbare Matrix |
+| **2 — Statistik zuerst** ✅ | Kalender-Adapter (FF/BLS/BEA/Fed/Treasury, Hash-Snapshot-Archiv), Regeltermine, Actuals (MQL5-Exporter bereit + Nasdaq-Fallback), **Klimatologie-Baseline**, erste Wochenmatrix **rein statistisch** mit Schwellen-Tabelle — **umgesetzt 23.09.2026: Tor T2 bestanden (39,5 % auf Brokerdaten, Struktur wie Bericht)** | erste belastbare Matrix |
 | **3 — LLM-Schicht** | News-/Community-Destillation, Analytiker-Fusion mit Band + Treiber-Wasserfall, Reporter/PDF, Journal | vollständig erklärte Matrix |
 | **4 — Quant-Feeds & Kalibrierung** | GVZ/iv30, FRED/RealYield, COT, GLD → Klassifikator + Richtungsmodell, Isotonic-Rekalibrierung, Session-/Gap-Intraday-Update | bessere Kalibrierung + Richtung |
 | **5 — Betrieb & Qualität** | Verifikations-/Backtest-Agent, Track-Record-Seite, Plumes, Scout (Google/Bing/Tavily), Daemon + Zeitplan; optional GARCH/CARR, Myfxbook-Outlook (Account), Options-Skew | messbarer, selbstkalibrierender Betrieb |

@@ -26,7 +26,7 @@ Dashboard, Gold-Akzente). Statistik zuerst, LLM gewichtet erklärt.
   getestete Whitelist); ein laufendes Terminal wird nie beendet. Ehrlicher
   User-Agent, keine Bot-Schutz-Umgehung, höfliche Abrufabstände.
 
-## Stand (Stufe 1 von 7 — 23.09.2026)
+## Stand (Stufe 2 von 7 — 23.09.2026)
 
 | ✅ | Baustein |
 |---|---|
@@ -34,12 +34,19 @@ Dashboard, Gold-Akzente). Statistik zuerst, LLM gewichtet erklärt.
 | ✅ | MetaTrader-5-Anbindung nativ (D1/H4/H1, Whitelist, nur lesend) |
 | ✅ | Plotly-Candlestick-Chart mit SMA 10/50/200 + Kennzahlen-Panel (ATR/RSI/TR Wilder) |
 | ✅ | GLM-Client mit Fehler-Taxonomie (1113/429·1302/finish_reason), Lauf- und Tagesbudget |
-| ✅ | Quellen-Launch-Check: 16 verifizierte Kern-URLs (Kalender, Quant-Feeds, News) mit Typ-/Signaturprüfung |
-| ✅ | SQLite mit versioniertem Schema, Audit-Journal (volle Prompts/Antworten) |
-| ✅ | 19 pytest-Ankertests (u. a. Kennzahlen-Anchor, MT5-Whitelist-Statiktest) |
+| ✅ | **Wochenmatrix (Klimatologie)**: P(Bewegungstag) je Wochentag mit Shrinkage, Schwelle B, Range-Band Q10–Q90, Warnstufen, Schwellen-Tabelle (1,0×/1,5×/2,0×) |
+| ✅ | **Kalender-Adapter**: ForexFactory, BLS, BEA, Fed, TreasuryDirect + regelbasierte Termine (GC FND/LTD/Opex, Feiertage, DST) — Hash-Snapshot-Archiv (point-in-time) |
+| ✅ | **Tagessicht**: Event-Zeitleiste (Europe/Berlin) mit Gold-Relevanz-Klassen und Dedup über Quellen |
+| ✅ | MQL5-Kalender-Exporter (`mql5/CalendarExport.mq5`) für Ist-Werte + Nasdaq-Fallback |
+| ✅ | Quellen-Launch-Check: 16 verifizierte Kern-URLs mit Typ-/Signaturprüfung |
+| ✅ | SQLite (versioniert), Audit-Journal, Prognose-Versionen (as_of) |
+| ✅ | 37 pytest-Ankertests (u. a. Klimatologie- und Regeltermin-Anker, Kalender-Parsing) |
 
-**Roadmap** (`doc/02_stufenplan.md`): S2 Klimatologie-Matrix → S3 HAR-Prognosemodell
-mit Walk-forward → S4 LLM-Destillation/Fusion → S5 Richtung & Quant-Feeds
+**Tor T2 bestanden:** eigene Klimatologie auf Brokerdaten = 39,5 % Bewegungstage
+(Bericht: ~43 % auf Futures) bei identischer Wochentags-Struktur (Mittwoch höchste Rate).
+
+**Roadmap** (`doc/02_stufenplan.md`): S3 HAR-Prognosemodell mit Walk-forward
+(BSS gegen die Basisrate) → S4 LLM-Destillation/Fusion → S5 Richtung & Quant-Feeds
 (GVZ/iv30, COT, FRED) → S6 Daemon & Track-Record → S7 Ausbau.
 
 ## Schnellstart

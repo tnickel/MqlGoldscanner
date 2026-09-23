@@ -69,10 +69,11 @@ with rechts:
                                   value=int(settings.get("llm_timeout_s", 300)), step=30)
     with st.container(border=True):
         st.subheader("Netz & Höflichkeit", width="content")
-        kontakt = st.text_input("Kontakt-Adresse im User-Agent (optional)",
+        kontakt = st.text_input("Kontakt-Adresse im User-Agent (empfohlen)",
                                 value=settings.get("kontakt_fuer_useragent", ""),
-                                help="Ehrlicher UA statt Browser-Vortäuschung — manche Quellen "
-                                     "sperren anonyme Clients.")
+                                help="Ehrlicher UA statt Browser-Vortäuschung — BLS sperrt "
+                                     "den User-Agent OHNE Kontakt-Adresse (403); mit Angabe "
+                                     "funktioniert die Quelle.")
         st.caption(f"Aktuell: `{config.user_agent(kontakt)}`")
         neuer_key = st.text_input("GLM-API-Key setzen (leer = unverändert)", type="password")
         if st.button("Key in secrets.local.json speichern", icon=":material/key:"):

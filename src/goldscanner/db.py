@@ -13,7 +13,7 @@ from pathlib import Path
 
 from . import config
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
@@ -36,6 +36,19 @@ CREATE TABLE IF NOT EXISTS agenten_schritte (
 CREATE TABLE IF NOT EXISTS budget_token (
     tag TEXT NOT NULL, modell TEXT NOT NULL, tokens INTEGER NOT NULL DEFAULT 0,
     requests INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (tag, modell));
+CREATE TABLE IF NOT EXISTS calendar_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, quelle TEXT NOT NULL,
+    abgerufen_am TEXT NOT NULL, inhalt_hash TEXT NOT NULL, inhalt TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS calendar_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    quelle TEXT NOT NULL, prioritaet INTEGER NOT NULL DEFAULT 5,
+    zeit_utc TEXT, datum TEXT NOT NULL, titel TEXT NOT NULL,
+    klasse TEXT, wichtigkeit INTEGER, gold_relevanz INTEGER, waehrung TEXT,
+    forecast TEXT, previous TEXT, actual_first TEXT, actual_latest TEXT);
+CREATE INDEX IF NOT EXISTS idx_events_datum ON calendar_events(datum);
+CREATE TABLE IF NOT EXISTS prognose_versionen (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, as_of TEXT NOT NULL,
+    woche TEXT NOT NULL, modell TEXT NOT NULL, inhalt TEXT NOT NULL);
 """
 
 
@@ -150,6 +163,92 @@ class Db:
                 "requests=requests+1", (modell, max(0, tokens)))
             self._con.commit()
 
+    # ── Kalender (S2) ────────────────────────────────────────────────────
+    def snapshot_speichern(self, quelle: str, inhalt: str) -> bool:
+        """Archiviert einen Roh-Snapshot — nur wenn sich der Hash geändert hat
+        (Point-in-time-Archiv ohne Müll). True = neu gespeichert."""
+        import hashlib
+        hash_ = hashlib.sha256(inhalt.encode("utf-8", errors="replace")).hexdigest()
+        with self._lock:
+            letzter = self._con.execute(
+                "SELECT inhalt_hash FROM calendar_snapshots WHERE quelle=? "
+                "ORDER BY id DESC LIMIT 1", (quelle,)).fetchone()
+            if letzter and letzter["inhalt_hash"] == hash_:
+                return False
+            self._con.execute(
+                "INSERT INTO calendar_snapshots(quelle,abgerufen_am,inhalt_hash,inhalt) "
+                "VALUES (?,?,?,?)", (quelle, _jetzt(), hash_, inhalt))
+            self._con.commit()
+            return True
+
+    def events_ersetzen(self, quelle: str, events: list[dict]) -> int:
+        """Idempotentes Ersetzen des Fensters einer Quelle (Delete+Insert)."""
+        with self._lock:
+            self._con.execute("DELETE FROM calendar_events WHERE quelle=?", (quelle,))
+            self._con.executemany(
+                "INSERT INTO calendar_events(quelle,prioritaet,zeit_utc,datum,titel,klasse,"
+                "wichtigkeit,gold_relevanz,waehrung,forecast,previous,actual_first,"
+                "actual_latest) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                [(e["quelle"], e.get("prioritaet", 5), e.get("zeit_utc"),
+                  e["datum"], e["titel"], e.get("klasse"), e.get("wichtigkeit"),
+                  e.get("gold_relevanz"), e.get("waehrung"), e.get("forecast"),
+                  e.get("previous"), e.get("actual"), e.get("actual"))
+                 for e in events])
+            self._con.commit()
+            return len(events)
+
+    def events_fuer_zeitraum(self, von: str, bis: str) -> list[dict]:
+        """Events mit datum zwischen von/bis (ISO-Date), aufsteigend."""
+        with self._lock:
+            zeilen = self._con.execute(
+                "SELECT * FROM calendar_events WHERE datum>=? AND datum<=? "
+                "ORDER BY zeit_utc, gold_relevanz DESC, wichtigkeit DESC",
+                (von, bis)).fetchall()
+        return [dict(r) for r in zeilen]
+
+    def events_anzahl(self) -> int:
+        with self._lock:
+            return self._con.execute("SELECT COUNT(*) FROM calendar_events").fetchone()[0]
+
+    def actual_nachziehen(self, quelle: str, datum_von: str, datum_bis: str,
+                          actuals: dict[tuple[str, str], str]) -> int:
+        """Trägt Ist-Werte nach (Schlüssel: (datum, titel-normalisiert)). Setzt
+        actual_first beim ersten Mal, aktualisiert actual_latest."""
+        with self._lock:
+            zeilen = self._con.execute(
+                "SELECT id, datum, titel, actual_first FROM calendar_events "
+                "WHERE datum>=? AND datum<=?", (datum_von, datum_bis)).fetchall()
+            geaendert = 0
+            for z in zeilen:
+                schluessel = (z["datum"], _titel_normalisiert(z["titel"]))
+                if schluessel in actuals and actuals[schluessel]:
+                    if z["actual_first"] is None:
+                        self._con.execute(
+                            "UPDATE calendar_events SET actual_first=?, actual_latest=? WHERE id=?",
+                            (actuals[schluessel], actuals[schluessel], z["id"]))
+                        geaendert += 1
+                    elif z["actual_first"] != actuals[schluessel]:
+                        self._con.execute(
+                            "UPDATE calendar_events SET actual_latest=? WHERE id=?",
+                            (actuals[schluessel], z["id"]))
+            self._con.commit()
+            return geaendert
+
+    # ── Prognose-Versionen (as_of, kein Look-ahead) ─────────────────────
+    def prognose_speichern(self, woche: str, modell: str, inhalt: str) -> int:
+        with self._lock:
+            import json as _json
+            cur = self._con.execute(
+                "INSERT INTO prognose_versionen(as_of,woche,modell,inhalt) VALUES (?,?,?,?)",
+                (_jetzt(), woche, modell, inhalt))
+            self._con.commit()
+            return int(cur.lastrowid)
+
     def close(self) -> None:
         with self._lock:
             self._con.close()
+
+
+def _titel_normalisiert(titel: str) -> str:
+    import re
+    return re.sub(r"[^a-z0-9]+", " ", (titel or "").lower()).strip()

@@ -59,6 +59,9 @@ DEFAULT_SETTINGS: dict = {
     "llm_timeout_s": 300,
     "kontakt_fuer_useragent": "",
     "rate_min_interval_s": 2.0,
+    # Wochenmatrix (S2)
+    "matrix_fenster": 13,          # Wochen für die Schwelle B je Wochentag
+    "matrix_k": 1.0,               # Bewegungstag: TR > k × Ø-TR des Wochentags
 }
 
 
