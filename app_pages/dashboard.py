@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sys
 from datetime import date, datetime
 from pathlib import Path
@@ -276,6 +277,57 @@ if matrix:
                     st.markdown("**Marktlage-Signale:**")
                     for f in marktlage["flags"]:
                         st.markdown(f"· {f}")
+
+    # ── S7: Wochen-Summenwert + Was-wäre-wenn ──────────────────────────
+    woche_summe = matrix.get("wochen_summe")
+    modell_info_s7 = matrix.get("modell_info") or {}
+    je_tag_verteilung = (modell_info_s7.get("je_tag") or {})
+    if woche_summe:
+        with st.expander(f"Wochen-Summenwert — P(mindestens 1 Bewegungstag) "
+                         f"**{woche_summe['p_mindestens_ein_modell'] * 100:.0f} %** "
+                         f"(Klima {woche_summe['p_mindestens_ein_klima'] * 100:.0f} %)"):
+            st.caption(woche_summe.get("hinweis", ""))
+    if je_tag_verteilung:
+        with st.expander("Was-wäre-wenn — Simulation (verändert keine "
+                         "gespeicherte Prognose)", expanded=False):
+            c1, c2, c3 = st.columns(3, gap="small")
+            with c1:
+                vola = st.slider("Volatilität", -50, 100, 0, 5,
+                                 format="%+d %%", key="s7_vola",
+                                 help="Sigma der Modell-Verteilung verschieben")
+            with c2:
+                mu_shift = st.slider("Range-Niveau", -50, 100, 0, 5,
+                                     format="%+d %%", key="s7_mu",
+                                     help="Erwartete Tagesrange verschieben")
+            with c3:
+                zuschlag = st.slider("Event-Zuschlag", -20, 20, 0, 1,
+                                     format="%+d pp", key="s7_event",
+                                     help="Additiv auf das Ergebnis je Tag")
+            if vola or mu_shift or zuschlag:
+                from goldscanner.modell.szenario import was_waere_wenn
+                mu_sigma = {d: (v["mu"], v["sigma"])
+                            for d, v in je_tag_verteilung.items()}
+                ln_schwellen = {t["datum"]: math.log(t["schwelle_pct"])
+                                for t in matrix["tage"] if t.get("schwelle_pct")}
+                simuliert = was_waere_wenn(mu_sigma, ln_schwellen,
+                                           vola_shift_pct=vola,
+                                           mu_shift_pct=mu_shift,
+                                           event_zuschlag_pp=zuschlag)
+                spalten_sim = st.columns(5, gap="small")
+                for spalte, t in zip(spalten_sim, matrix["tage"]):
+                    with spalte:
+                        p_sim = simuliert.get(t["datum"])
+                        basis = (t.get("p_stat") or 0) * 100
+                        delta_pp = (p_sim * 100 - basis) if p_sim is not None else 0
+                        st.metric(t["wochentag"][:2],
+                                  f"{p_sim * 100:.0f} %" if p_sim is not None else "–",
+                                  f"{delta_pp:+.0f} pp", border=True)
+                st.caption("⚠️ **Simulation** — dieselbe Rechenformel wie das echte "
+                           "Modell, aber mit von Hand verschobenen Parametern. Nicht "
+                           "gespeichert, nicht exportiert, nicht in der Verifikation.")
+            else:
+                st.caption("Slider bewegen, um Szenario-Wirkungen auf P je Tag zu "
+                           "sehen (alles bei 0 = Prognose unverändert).")
 
     if llm_sektion.get("ok"):
         band = llm_sektion.get("band_pp", 10)

@@ -26,7 +26,7 @@ Dashboard, Gold-Akzente). Statistik zuerst, LLM gewichtet erklärt.
   getestete Whitelist); ein laufendes Terminal wird nie beendet. Ehrlicher
   User-Agent, keine Bot-Schutz-Umgehung, höfliche Abrufabstände.
 
-## Stand (Stufe 6 von 7 — 23.09.2026)
+## Stand (Stufe 7 von 7 — 23.09.2026, komplett)
 
 | ✅ | Baustein |
 |---|---|
@@ -56,7 +56,7 @@ Dashboard, Gold-Akzente). Statistik zuerst, LLM gewichtet erklärt.
 | ✅ | **MT5-Export (S6)**: Prognosen als CSV in den Terminal-Common-Files für eigene EAs (Handelsfilter/Lot-Größe) + lokale Kopie |
 | ✅ | **URL-Scout (S6)**: bewertete Quellen-Vorschläge aus Google-News-RSS (ohne Such-API-Key) mit Annehmen/Ablehnen |
 | ✅ | SQLite (versioniert, Schema v6), Audit-Journal mit vollem Prompt/Antwort je LLM-Schritt, Prognose-Versionen (as_of) |
-| ✅ | 87 pytest-Ankertests (u. a. HAR-Parameter-Recovery, Brier/BSS-Anker, Band-Disziplin, JSON-Validierung, PDF-Smoke, Daemon-Zeitplan, Point-in-Time-Verifikation, Kein-Look-ahead) |
+| ✅ | 94 pytest-Ankertests (u. a. HAR-Parameter-Recovery, Brier/BSS-Anker, Band-Disziplin, JSON-Validierung, PDF-Smoke, Daemon-Zeitplan, Point-in-Time-Verifikation, Kein-Look-ahead) |
 
 **Tor T2 bestanden:** eigene Klimatologie auf Brokerdaten (1.001 Tage Tickmill XAUUSD)
 = 41,2 % Bewegungstage (Bericht: ~43 % auf Futures) bei identischer Wochentags-Struktur
@@ -91,8 +91,12 @@ MT5-Prognose-Export für eigene EAs und URL-Scout. Ehrlich: Der Track-Record beg
 bei null (Prognose-Historie erst seit S2, Bewertungen entstehen immer erst einen Tag
 später) — die Maschine steht, die Zahlen wachsen automatisch.
 
-**Roadmap** (`doc/02_stufenplan.md`): S7 Ausbau nach Bedarf (GARCH/CARR,
-Options-Skew, Wochen-Summenwert, Was-wäre-wenn, Myfxbook-Account, REST-API).
+**S7 (23.09.2026) — Ausbau:** Wochen-Summenwert P(≥1 Bewegungstag: Modell 87 % vs.
+Klima 92 %), Was-wäre-wenn-Simulation (Slider auf den gespeicherten
+Modell-Parametern, nie gespeichert) und ein schreibgeschütztes localhost-REST
+(`127.0.0.1:8606`: `/status` · `/matrix` · `/prognose.csv` · `/health`) für andere
+Tools. Bewusst geschoben: GARCH/CARR, Options-Skew (Cboe-Rechte), Myfxbook/WGC
+(Accounts). **Damit sind alle Stufen S1–S7 umgesetzt.**
 
 ## Schnellstart
 

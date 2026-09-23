@@ -296,6 +296,12 @@ def baue_matrix(db, settings: dict, basis: date | None = None) -> dict:
         "richtung": richtung,
         "marktlage": _marktlage(db, d1),
     }
+    # S7: Wochen-Summenwert P(≥1 Bewegungstag) — Fehler tolerieren
+    try:
+        from .modell.szenario import wochen_summenwert
+        matrix["wochen_summe"] = wochen_summenwert(matrix, d1, k=k)
+    except Exception:
+        matrix["wochen_summe"] = None
     db.prognose_speichern(matrix["woche"], matrix["modell"],
                           json.dumps(matrix, ensure_ascii=False))
     return matrix

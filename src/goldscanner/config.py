@@ -67,6 +67,8 @@ DEFAULT_SETTINGS: dict = {
     "llm_melde_schwelle_pp": 10.0, # Prognoseänderung, ab der eine Meldung entsteht
     "news_fenster_tage": 7,        # RSS-Items älter als das werden ignoriert
     "news_max_items_llm": 80,      # Obergrenze je Destillations-Aufruf
+    # Ausbau (S7)
+    "rest_api_port": 8606,         # read-only localhost REST; 0 = aus
 }
 
 

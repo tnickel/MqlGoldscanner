@@ -27,6 +27,20 @@ apply_theme()
 from goldscanner.app_state import hole_db  # noqa: E402
 
 
+# ------------------------------------------------- REST (S7, nur lesen)
+@st.cache_resource(show_spinner=False)
+def _rest_server():
+    """Schreibgeschütztes localhost-REST — einmal je Prozess (wie KiScanner)."""
+    try:
+        from goldscanner import rest_api
+        return rest_api.start_background()
+    except Exception:
+        return None
+
+
+rest_server = _rest_server()
+
+
 # ------------------------------------------------------------------ Sidebar
 settings = config.load_settings()
 with st.sidebar:
@@ -43,6 +57,11 @@ with st.sidebar:
                  color="blue", icon=":material/monitoring:")
         endpunkt = "Coding (Abo)" if settings.get("glm_endpunkt") != "api" else "API (PAYG)"
         st.badge(f"GLM {endpunkt}", color="gray", icon=":material/cable:")
+        if rest_server is not None:
+            st.badge(f"REST :{rest_server.port}", color="green",
+                     icon=":material/cable:")
+        elif int(settings.get("rest_api_port", 8606)) > 0:
+            st.badge("REST-Port belegt", color="orange", icon=":material/cable:")
         try:
             db = hole_db()
             heute = db.tokens_heute()

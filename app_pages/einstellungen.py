@@ -84,6 +84,14 @@ with rechts:
                                        value=int(settings.get("news_fenster_tage", 7)),
                                        step=1,
                                        help="Ältere RSS-Items werden ignoriert.")
+        st.caption("**Ausbau (S7)** — schreibgeschütztes REST für andere Tools "
+                   "(localhost only):")
+        rest_port = st.number_input("REST-Port (0 = aus)", min_value=0, max_value=65535,
+                                    value=int(settings.get("rest_api_port", 8606)),
+                                    step=1,
+                                    help="Endpunkte: /status · /matrix · /prognose.csv · "
+                                         "/health. Bindet nur an 127.0.0.1. Änderung "
+                                         "wirkt nach App-Neustart.")
     with st.container(border=True):
         st.subheader("Netz & Höflichkeit", width="content")
         kontakt = st.text_input("Kontakt-Adresse im User-Agent (empfohlen)",
@@ -119,6 +127,7 @@ if st.button("Alle Einstellungen speichern", type="primary", icon=":material/sav
         "llm_band_pp": float(band_pp),
         "llm_melde_schwelle_pp": float(melde_schwelle),
         "news_fenster_tage": int(news_fenster),
+        "rest_api_port": int(rest_port),
         "kontakt_fuer_useragent": kontakt.strip(),
     })
     st.toast("Gespeichert — Sidebar-Status aktualisiert sich beim nächsten Klick.",

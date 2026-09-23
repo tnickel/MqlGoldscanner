@@ -1,7 +1,7 @@
-# MqlGoldscanner — Stufenplan (v1.6, 23.09.2026)
+# MqlGoldscanner — Stufenplan (v1.7, 23.09.2026)
 
 > **Technologie-Wechsel 23.09.2026:** Nach Nutzer-Entscheidung läuft die Umsetzung auf
-> **Python/Streamlit** (wie der MqlKiScanner), nicht mehr Java/JavaFX. **S1–S6 sind in
+> **Python/Streamlit** (wie der MqlKiScanner), nicht mehr Java/JavaFX. **S1–S7 sind in
 > Python fertig abgenommen.** Die Java-Inhalte der Stufenbeschreibungen unten sind
 > historisch zu lesen.
 >
@@ -78,6 +78,20 @@
 > einen Tag später entstehen — die Maschine steht, der 14-Tage-Dauerbetriebs-
 > Nachweis läuft jetzt an. 87 pytest grün (Zeitplan, Point-in-Time + Mathe-
 > Anker, LLM-Delta-Anker, Export-CSV, Scout, DB v6).
+>
+> **S7 abgenommen 23.09.2026 (Ausbau, ohne Account/Rechte-Bausteine):**
+> `modell/szenario.py` — Wochen-Summenwert P(≥1 Bewegungstag): Modell-Produkt
+> unter Unabhängigkeitsannahme (87,0 %) vs. Klimatologie-Produkt (92,4 %),
+> mit ehrlichem Hinweis, dass real Clustering den Wert drückt; Was-wäre-wenn:
+> Vola-/Range-/Event-Slider rechnen P je Tag aus den GESPEICHERTEN mu/sigma
+> neu (dieselbe Formel wie das Modell), reiner UI-Zustand, nie gespeichert.
+> `rest_api.py` — schreibgeschütztes localhost-REST (127.0.0.1:8606,
+> konfigurierbar/abschaltbar): /status (DB-Bestände, Daemon, letzte Matrix),
+> /matrix (jüngste Fusion-Version als JSON), /prognose.csv (wie MT5-Export),
+> /health; startet lazily mit der App (KiScanner-Muster), Badge in der
+> Sidebar. Live verifiziert per curl. **Bewusst geschoben (dokumentiert):**
+> GJR-GARCH/CARR, Options-Skew (Cboe-Rechte), Myfxbook (Account), WGC
+> (Registrierung) — jede einzeln beauftragbar. 94 pytest grün.
 
 Verfeinerung von §13 des Konzepts (`doc/00_konzept.md`). Ziel: Umsetzung in **7 Stufen**,
 die jeweils für sich abgeschlossen, testbar und **nutzbar** sind — die App bleibt nach
