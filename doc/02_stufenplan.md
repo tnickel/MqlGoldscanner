@@ -1,7 +1,7 @@
-# MqlGoldscanner — Stufenplan (v1.5, 23.09.2026)
+# MqlGoldscanner — Stufenplan (v1.6, 23.09.2026)
 
 > **Technologie-Wechsel 23.09.2026:** Nach Nutzer-Entscheidung läuft die Umsetzung auf
-> **Python/Streamlit** (wie der MqlKiScanner), nicht mehr Java/JavaFX. **S1–S5 sind in
+> **Python/Streamlit** (wie der MqlKiScanner), nicht mehr Java/JavaFX. **S1–S6 sind in
 > Python fertig abgenommen.** Die Java-Inhalte der Stufenbeschreibungen unten sind
 > historisch zu lesen.
 >
@@ -56,6 +56,28 @@
 > auf der Tagessicht. **Wichtig für S3-Statistik:** Auf 17 Jahren gewinnt im
 > Movement-Backtest jetzt har_D (BSS +0,067 statt B +0,161 auf 4 Jahren) — Events+IV
 > helfen langfristig; Tor T3 bleibt bestanden. 80 pytest grün.
+>
+> **S6 abgenommen 23.09.2026 (Betrieb läuft, Nachweise wachsen):**
+> `betrieb/daemon.py` — unabhängiger Prozess (DETACHED, überlebt UI-Schließung),
+> Zeitplan Tageslauf 06:30 / Scout So 17:00 / Wochenlauf So 18:00 / Verifikation
+> Sa 09:00, Herzschlag alle 5 Min in daemon_status, Job-Merker gegen
+> Wiederholung, lauf_lock gegen GUI-Doppelläufe, kooperativer Stopp über
+> Stop-Datei (≤30 s). `betrieb/verifikation.py` — point-in-time-Auswertung je
+> vergangener Kerze gegen die Prognose, die damals galt (as_of ≤ Tag):
+> TR vs. Schwelle B (p_klima/p_stat/p_finale), Richtung, Range-Coverage →
+> verifikationen-Tabelle (DB v6). `app_pages/track_record.py` — Reliability-
+> Diagramm (Plotly, Punktgröße ∝ n), Brier je Prognose-Ebene, **LLM-Delta-Nutzt
+> = Tor-T4-Fenster live**, Richtungstreffer, Coverage, Rohdaten; Daemon-Steuerung
+> (Start/Stop/Status). `betrieb/mt5_export.py` — Prognose-CSV (Semikolon, ISO,
+> p in %) nach Common/Files für eigene EAs + lokale Kopie data/exports/.
+> `betrieb/scout.py` — Google-News-RSS-Domänen-Zählung (ohne Such-API-Key),
+> bekannte/abgelehnte Domänen gefiltert, bewertete Vorschläge (Score, Beispiel-
+> Titel) mit Annehmen/Ablehnen in der Quellen-UI; erster Lauf: 30 Domänen,
+> 1 neuer Vorschlag (indiatimes.com, Score 3). **Ehrlich:** Track-Record ist
+> leer, weil die Prognose-Historie erst seit S2 existiert und Bewertungen immer
+> einen Tag später entstehen — die Maschine steht, der 14-Tage-Dauerbetriebs-
+> Nachweis läuft jetzt an. 87 pytest grün (Zeitplan, Point-in-Time + Mathe-
+> Anker, LLM-Delta-Anker, Export-CSV, Scout, DB v6).
 
 Verfeinerung von §13 des Konzepts (`doc/00_konzept.md`). Ziel: Umsetzung in **7 Stufen**,
 die jeweils für sich abgeschlossen, testbar und **nutzbar** sind — die App bleibt nach

@@ -26,7 +26,7 @@ Dashboard, Gold-Akzente). Statistik zuerst, LLM gewichtet erklärt.
   getestete Whitelist); ein laufendes Terminal wird nie beendet. Ehrlicher
   User-Agent, keine Bot-Schutz-Umgehung, höfliche Abrufabstände.
 
-## Stand (Stufe 5 von 7 — 23.09.2026)
+## Stand (Stufe 6 von 7 — 23.09.2026)
 
 | ✅ | Baustein |
 |---|---|
@@ -51,8 +51,12 @@ Dashboard, Gold-Akzente). Statistik zuerst, LLM gewichtet erklärt.
 | ✅ | **Tagessicht**: Event-Zeitleiste (Europe/Berlin) mit Gold-Relevanz-Klassen und Dedup über Quellen |
 | ✅ | MQL5-Kalender-Exporter (`mql5/CalendarExport.mq5`) für Ist-Werte + Nasdaq-Fallback |
 | ✅ | Quellen-Launch-Check: 16 verifizierte Kern-URLs mit Typ-/Signaturprüfung |
-| ✅ | SQLite (versioniert, Schema v4: news_items/fusionen/meldungen), Audit-Journal mit vollem Prompt/Antwort je LLM-Schritt, Prognose-Versionen (as_of) |
-| ✅ | 69 pytest-Ankertests (u. a. HAR-Parameter-Recovery, Brier/BSS-Anker, Band-Disziplin, JSON-Validierung, PDF-Smoke, Kein-Look-ahead) |
+| ✅ | **Daemon (S6)**: unabhängiger Prozess mit Zeitplan (Tageslauf 06:30 · Scout So 17:00 · Wochenlauf So 18:00 · Verifikation Sa 09:00), Herzschlag, Locks gegen Doppelläufe, kooperativer Stopp — Steuerung auf der Track-Record-Seite |
+| ✅ | **Verifikations-Agent + Track-Record (S6)**: jeder vergangene Tag wird gegen die point-in-time-Prognose geprüft (TR vs. Schwelle B, Richtung, Range-Coverage) — Reliability-Diagramm, Brier je Ebene, **LLM-Delta-Nutzt (Tor T4)** füllen sich automatisch |
+| ✅ | **MT5-Export (S6)**: Prognosen als CSV in den Terminal-Common-Files für eigene EAs (Handelsfilter/Lot-Größe) + lokale Kopie |
+| ✅ | **URL-Scout (S6)**: bewertete Quellen-Vorschläge aus Google-News-RSS (ohne Such-API-Key) mit Annehmen/Ablehnen |
+| ✅ | SQLite (versioniert, Schema v6), Audit-Journal mit vollem Prompt/Antwort je LLM-Schritt, Prognose-Versionen (as_of) |
+| ✅ | 87 pytest-Ankertests (u. a. HAR-Parameter-Recovery, Brier/BSS-Anker, Band-Disziplin, JSON-Validierung, PDF-Smoke, Daemon-Zeitplan, Point-in-Time-Verifikation, Kein-Look-ahead) |
 
 **Tor T2 bestanden:** eigene Klimatologie auf Brokerdaten (1.001 Tage Tickmill XAUUSD)
 = 41,2 % Bewegungstage (Bericht: ~43 % auf Futures) bei identischer Wochentags-Struktur
@@ -80,8 +84,15 @@ GLD-Flüsse, Crowding-Flags), die Dashboard, PDF und dem Analytiker-Agent Kontex
 gibt. Nebenbei: Auf 17 Jahren gewinnt im Bewegungs-Backtest die Event+IV-Konfiguration
 (har_D, BSS +0,067) — Tor T3 bleibt bestanden.
 
-**Roadmap** (`doc/02_stufenplan.md`): S6 Betrieb & Track-Record (Daemon,
-Verifikations-Agent inkl. Tor-T4-Auswertung, URL-Scout, MT5-Export) → S7 Ausbau.
+**S6 (23.09.2026) — der Betrieb läuft an:** Daemon als unabhängiger Prozess mit
+Herzschlag und kooperativem Stopp, Verifikations-Agent (point-in-time), Track-Record-
+Seite (Reliability, Brier je Ebene, LLM-Delta-Nutzt = Tor-T4-Fenster live),
+MT5-Prognose-Export für eigene EAs und URL-Scout. Ehrlich: Der Track-Record beginnt
+bei null (Prognose-Historie erst seit S2, Bewertungen entstehen immer erst einen Tag
+später) — die Maschine steht, die Zahlen wachsen automatisch.
+
+**Roadmap** (`doc/02_stufenplan.md`): S7 Ausbau nach Bedarf (GARCH/CARR,
+Options-Skew, Wochen-Summenwert, Was-wäre-wenn, Myfxbook-Account, REST-API).
 
 ## Schnellstart
 

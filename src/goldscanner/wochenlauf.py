@@ -18,6 +18,7 @@ from .adapter import news as news_adapter
 from .adapter import quant as quant_adapter
 from .agenten import analytiker, destillation
 from .bericht import pdf as pdf_bericht
+from .betrieb import mt5_export
 from .llm.client import GlmClient
 from .modell.quant_feeds import gvz_aktualisieren
 from .mt5 import kurse
@@ -41,7 +42,7 @@ def starten(db, settings: dict) -> dict:
     """Läuft synchron (UI zeigt Aktivitäts-Badge). Rückgabe: Gesamtprotokoll."""
     protokoll: dict = {"kurse": {}, "kalender": {}, "gvz": {}, "quant": {},
                        "matrix": {}, "news": {}, "community": {}, "llm": {},
-                       "pdf": {}}
+                       "pdf": {}, "export": {}}
 
     lauf = db.lauf_starten(
         "wochenlauf",
@@ -145,6 +146,13 @@ def starten(db, settings: dict) -> dict:
             "llm_ok": protokoll["llm"].get("ok", False),
             "pdf": protokoll["pdf"],
         }
+
+        # 9) MT5-Export (CSV für eigene EAs) — lokal immer, Common-Files wenn da
+        try:
+            protokoll["export"] = mt5_export.schreibe_export(matrix)
+        except Exception as exc:
+            protokoll["export"] = {"ok": False,
+                                   "grund": f"{type(exc).__name__}: {exc}"}
         db.schritt(
             lauf, "wochenlauf", "gesamt",
             "kurse→kalender→gvz→quant→matrix→news→community→fusion→pdf",
@@ -156,7 +164,8 @@ def starten(db, settings: dict) -> dict:
             f"richtung={'ok' if matrix.get('richtung') else 'aus'} · "
             f"news={protokoll['news'].get('neu', '?')} neu · "
             f"fusion={'ok' if protokoll['llm'].get('ok') else 'aus'} · "
-            f"pdf={'ok' if protokoll['pdf'].get('ok') else 'aus'}",
+            f"pdf={'ok' if protokoll['pdf'].get('ok') else 'aus'} · "
+            f"export={'ok' if protokoll['export'].get('ok') else 'aus'}",
             ok=bool(protokoll["kalender"].get("ok")))
         db.lauf_beenden(lauf, True)
         protokoll["matrix_objekt"] = matrix

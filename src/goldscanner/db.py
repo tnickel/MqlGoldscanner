@@ -13,7 +13,7 @@ from pathlib import Path
 
 from . import config
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
@@ -72,6 +72,21 @@ CREATE TABLE IF NOT EXISTS kalibrierung (
     ziel TEXT NOT NULL, konfiguration TEXT NOT NULL, methode TEXT NOT NULL,
     parameter TEXT NOT NULL, n_train INTEGER, n_test INTEGER,
     brier REAL, brier_baseline REAL, bss REAL, meta TEXT);
+CREATE TABLE IF NOT EXISTS verifikationen (
+    datum TEXT NOT NULL PRIMARY KEY, woche TEXT NOT NULL, as_of_prognose TEXT NOT NULL,
+    p_klima REAL, p_stat REAL, p_finale REAL, eingetreten INTEGER,
+    richtung_p_hoch REAL, richtung_eingetreten INTEGER,
+    tr_usd REAL, schwelle_usd REAL, q10_usd REAL, q90_usd REAL, in_band INTEGER,
+    verifiziert_am TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS daemon_status (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, zeit TEXT NOT NULL, job TEXT NOT NULL,
+    ok INTEGER, info TEXT);
+CREATE TABLE IF NOT EXISTS daemon_zeiten (
+    job TEXT NOT NULL PRIMARY KEY, zuletzt TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS scout_vorschlaege (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, zeit TEXT NOT NULL, domain TEXT NOT NULL,
+    score INTEGER, beispiel_titel TEXT, status TEXT NOT NULL DEFAULT 'offen',
+    UNIQUE(domain, zeit));
 """
 
 
@@ -281,12 +296,13 @@ class Db:
         return {r["tag"]: r["wert"] for r in zeilen}
 
     # ── Prognose-Versionen (as_of, kein Look-ahead) ─────────────────────
-    def prognose_speichern(self, woche: str, modell: str, inhalt: str) -> int:
+    def prognose_speichern(self, woche: str, modell: str, inhalt: str,
+                           as_of: str | None = None) -> int:
         with self._lock:
             import json as _json
             cur = self._con.execute(
                 "INSERT INTO prognose_versionen(as_of,woche,modell,inhalt) VALUES (?,?,?,?)",
-                (_jetzt(), woche, modell, inhalt))
+                (as_of or _jetzt(), woche, modell, inhalt))
             self._con.commit()
             return int(cur.lastrowid)
 
@@ -413,6 +429,88 @@ class Db:
         with self._lock:
             zeilen = self._con.execute(sql, (ziel, limit) if ziel else (limit,)).fetchall()
         return [dict(r) for r in zeilen]
+
+    # ── Verifikationen (S6: Prognose → Realität, Grundlage Tor T4) ──────
+    def verifikation_speichern(self, zeile: dict) -> None:
+        with self._lock:
+            self._con.execute(
+                "INSERT OR REPLACE INTO verifikationen(datum,woche,as_of_prognose,"
+                "p_klima,p_stat,p_finale,eingetreten,richtung_p_hoch,"
+                "richtung_eingetreten,tr_usd,schwelle_usd,q10_usd,q90_usd,in_band,"
+                "verifiziert_am) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (zeile["datum"], zeile["woche"], zeile["as_of_prognose"],
+                 zeile.get("p_klima"), zeile.get("p_stat"), zeile.get("p_finale"),
+                 zeile.get("eingetreten"), zeile.get("richtung_p_hoch"),
+                 zeile.get("richtung_eingetreten"), zeile.get("tr_usd"),
+                 zeile.get("schwelle_usd"), zeile.get("q10_usd"), zeile.get("q90_usd"),
+                 zeile.get("in_band"), _jetzt()))
+            self._con.commit()
+
+    def verifikationen(self, limit: int | None = None) -> list[dict]:
+        sql = ("SELECT * FROM verifikationen ORDER BY datum DESC"
+               + (f" LIMIT {int(limit)}" if limit else ""))
+        with self._lock:
+            zeilen = self._con.execute(sql).fetchall()
+        return [dict(r) for r in zeilen]
+
+    # ── Daemon (S6: Herzschlag + Job-Merker gegen Wiederholung) ─────────
+    def daemon_status_schreiben(self, job: str, ok: bool, info: str = "") -> None:
+        with self._lock:
+            self._con.execute(
+                "INSERT INTO daemon_status(zeit,job,ok,info) VALUES (?,?,?,?)",
+                (_jetzt(), job, 1 if ok else 0, info[:500]))
+            self._con.commit()
+
+    def daemon_letzter_status(self, n: int = 10) -> list[dict]:
+        with self._lock:
+            zeilen = self._con.execute(
+                "SELECT * FROM daemon_status ORDER BY id DESC LIMIT ?", (n,)).fetchall()
+        return [dict(r) for r in zeilen]
+
+    def daemon_zeit_setzen(self, job: str) -> None:
+        with self._lock:
+            self._con.execute(
+                "INSERT INTO daemon_zeiten(job,zuletzt) VALUES (?,?) "
+                "ON CONFLICT(job) DO UPDATE SET zuletzt=excluded.zuletzt",
+                (job, _jetzt()))
+            self._con.commit()
+
+    def daemon_zeiten(self) -> dict[str, str]:
+        with self._lock:
+            zeilen = self._con.execute("SELECT job, zuletzt FROM daemon_zeiten").fetchall()
+        return {r["job"]: r["zuletzt"] for r in zeilen}
+
+    # ── URL-Scout (S6: bewertete Quellen-Vorschläge) ─────────────────────
+    def scout_vorschlag_speichern(self, domain: str, score: int,
+                                  beispiel_titel: str) -> bool:
+        """Neuen Vorschlag anlegen; bekannte Domain (offen) wird nicht
+        doppelt vorgeschlagen. Rückgabe True = neu."""
+        with self._lock:
+            offen = self._con.execute(
+                "SELECT id FROM scout_vorschlaege WHERE domain=? AND status='offen'",
+                (domain,)).fetchone()
+            if offen:
+                return False
+            self._con.execute(
+                "INSERT OR IGNORE INTO scout_vorschlaege(zeit,domain,score,"
+                "beispiel_titel) VALUES (?,?,?,?)",
+                (_jetzt(), domain, int(score), beispiel_titel[:200]))
+            self._con.commit()
+            return True
+
+    def scout_vorschlaege(self, status: str | None = None) -> list[dict]:
+        sql = ("SELECT * FROM scout_vorschlaege"
+               + (" WHERE status=?" if status else "")
+               + " ORDER BY score DESC, id DESC LIMIT 30")
+        with self._lock:
+            zeilen = self._con.execute(sql, (status,) if status else ()).fetchall()
+        return [dict(r) for r in zeilen]
+
+    def scout_status_setzen(self, id_: int, status: str) -> None:
+        with self._lock:
+            self._con.execute(
+                "UPDATE scout_vorschlaege SET status=? WHERE id=?", (status, id_))
+            self._con.commit()
 
     def close(self) -> None:
         with self._lock:
