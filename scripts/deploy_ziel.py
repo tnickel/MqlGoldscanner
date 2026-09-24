@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Deployment: MqlGoldscanner auf den konfigurierten Zielrechner.
 
-Analog zum KiScanner-Deploy (dort scripts/deploy_ns1mqsv.py), ergaenzt um:
+Analog zum KiScanner-Deploy (dort scripts/deploy_ziel.py), ergaenzt um:
 
   - Daemon-Autostart (Wochenlauf/Verifikation/Tageslauf laufen dort von
     selbst via goldscanner.betrieb.daemon, detached)
