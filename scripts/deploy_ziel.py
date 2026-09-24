@@ -322,20 +322,25 @@ def venv_und_pakete(ziel: Ziel, python_exe: str) -> None:
     _log("smoke", out.strip()[-120:] or err.strip()[-200:])
 
 
-def task_anlegen(ziel: Ziel, name: str, bat: str, onstart: bool,
-                 minimiert_titel: str = "MqlGoldscanner") -> None:
+def task_anlegen(ziel: Ziel, name: str, bat: str, onstart: bool) -> None:
     """Task ALS ZIEL-USER (Interactive ohne Passwort — laeuft in dessen
-    Desktop-Session, Fenster sind sichtbar, solange er angemeldet ist).
-    OHNE Zeitlimit: schtasks-Default killt nach 72 h."""
+    Desktop-Session, solange er angemeldet ist). OHNE Zeitlimit: der
+    schtasks-Default killt nach 72 h.
+
+    Die .bat wird DIREKT als Execute eingetragen (mit WorkingDirectory)
+    — kein `cmd /c start "Titel" /min ...`: dieses verschachtelte
+    Quoting zerbricht im Task-Kontext ("start ... konnte nicht gefunden
+    werden")."""
     ziel_user = ziel.zugang["ziel_user"]
+    ordner = bat.rsplit("\\", 1)[0]
     trigger = ("$t = New-ScheduledTaskTrigger -AtStartup"
                if onstart else
                "$t = New-ScheduledTaskTrigger -Once -At "
                "(Get-Date).AddMinutes(10)")
     skript = (
         f"$ErrorActionPreference = 'Stop'; {trigger}; "
-        "$a = New-ScheduledTaskAction -Execute 'cmd.exe' "
-        f"-Argument '/c start \"{minimiert_titel}\" /min \"{bat}\"'; "
+        f"$a = New-ScheduledTaskAction -Execute '{bat}' "
+        f"-WorkingDirectory '{ordner}'; "
         "$s = New-ScheduledTaskSettingsSet -ExecutionTimeLimit "
         "(New-TimeSpan -Seconds 0) -AllowStartIfOnBatteries "
         "-DontStopIfGoingOnBatteries -StartWhenAvailable; "
@@ -345,41 +350,56 @@ def task_anlegen(ziel: Ziel, name: str, bat: str, onstart: bool,
     _log("task", f"{name}: {out.strip() or err.strip()[:160]}")
 
 
-def daemon_starten(ziel: Ziel) -> None:
-    """Daemon über start_goldscanner_daemon.bat (detached;
-    starte_detached() verhindert Doppelläufe selbst)."""
+def alte_app_tasks_entfernen(ziel: Ziel) -> None:
+    """Defekte App-Tasks (altes cmd/start-Quoting) entsorgen — die Apps
+    startet der Nutzer per Doppelklick der start.bat."""
+    for name in ("MqlGoldscannerStart", "MqlGoldscanner Autostart"):
+        ziel.run(f'schtasks /Delete /TN "{name}" /F >nul 2>&1')
+    _log("task", "alte App-Tasks entfernt (Apps startet der Nutzer selbst)")
+
+
+def daemon_neu_starten(ziel: Ziel) -> None:
+    """Daemon sauber stoppen und über den Task mit aktuellem Code neu
+    starten (starte_detached verhindert Doppelläufe selbst)."""
     bat = ziel.ziel.replace("/", chr(92)) + "\\start_goldscanner_daemon.bat"
-    task_anlegen(ziel, "MqlGoldscanner Daemon", bat, onstart=True,
-                 minimiert_titel="Goldscanner-Daemon")
+    task_anlegen(ziel, "MqlGoldscanner Daemon", bat, onstart=True)
+    venv_py = f"{ziel.ziel}/.venv/Scripts/python.exe"
+    ziel.run('schtasks /End /TN "MqlGoldscanner Daemon" >nul 2>&1')
+    ziel.run(f'"{venv_py}" -c "import sys; sys.path.insert(0, '
+             f"r'{ziel.ziel}/src'); from goldscanner.betrieb import daemon; "
+             'print(daemon.stoppe())"', timeout=60)
+    time.sleep(4)
     ziel.run('schtasks /Run /TN "MqlGoldscanner Daemon"')
-    _log("daemon", "Task angestossen (PID dann in data/daemon.pid)")
-
-
-def app_starten(ziel: Ziel) -> None:
-    bat = ziel.ziel.replace("/", chr(92)) + "\\start.bat"
-    task_anlegen(ziel, "MqlGoldscannerStart",
-                 f'start "MqlGoldscanner" /min "{bat}"', onstart=False)
-    task_anlegen(ziel, "MqlGoldscanner Autostart",
-                 f'start "MqlGoldscanner" /min "{bat}"', onstart=True)
-    ziel.run('schtasks /Run /TN "MqlGoldscannerStart"')
-    deadline = time.time() + 420
-    antwort = ""
+    deadline = time.time() + 120
     while time.time() < deadline:
-        time.sleep(8)
-        out, _, _ = ziel.ps(
-            "$ErrorActionPreference = 'SilentlyContinue'; try { "
-            "(Invoke-WebRequest -Uri 'http://127.0.0.1:8505"
-            "/_stcore/health' -UseBasicParsing -TimeoutSec 4).Content } "
-            "catch { 'warte' }")
-        antwort = out.strip()
-        if antwort == "ok":
+        time.sleep(6)
+        out, _, _ = ziel.run(f'"{venv_py}" -c "import sys; sys.path.insert(0, '
+                             f"r'{ziel.ziel}/src'); from goldscanner.betrieb "
+                             "import daemon; print(daemon.laeuft())\"",
+                             timeout=60)
+        if out.strip() == "True":
             break
-    _log("start", f"Streamlit 8505: {antwort}"
-          + ("" if antwort == "ok" else
-             " — nicht hochgekommen; dort start.bat-Fenster pruefen"))
+    _log("daemon", "neu gestartet, läuft: " + out.strip())
+
+
+def app_health(ziel: Ziel) -> None:
+    """Nur Statusmeldung: die App selbst startet der Nutzer per
+    Doppelklick der start.bat (bewusste Konvention — kein Autostart)."""
+    out, _, _ = ziel.ps(
+        "try { (Invoke-WebRequest -Uri 'http://127.0.0.1:8505"
+        "/_stcore/health' -UseBasicParsing -TimeoutSec 4).Content } "
+        "catch { 'aus' }")
+    zustand = out.strip()
+    if zustand == "ok":
+        _log("app", "App läuft bereits auf :8505 (Streamlit lädt neuen "
+                    "Code beim nächsten Seitenaufruf selbst)")
+    else:
+        _log("app", "App aus — am Zielrechner per Doppelklick "
+                    "C:\\Forex\\MqlGoldscanner\\start.bat starten")
     out, _, _ = ziel.ps(
         "try { (Invoke-WebRequest -Uri 'http://127.0.0.1:8606/health' "
-        "-UseBasicParsing -TimeoutSec 5).StatusCode } catch { 'aus' }")
+        "-UseBasicParsing -TimeoutSec 5).StatusCode } catch { 'aus (lazy, "
+        "kommt mit der App)' }")
     _log("rest", f"REST 8606 /health: {out.strip()}")
 
 
@@ -404,11 +424,12 @@ def main() -> None:
             venv_und_pakete(ziel, python_exe)
         rechte_setzen(ziel)
         if not args.kein_start:
-            daemon_starten(ziel)
-            app_starten(ziel)
+            alte_app_tasks_entfernen(ziel)
+            daemon_neu_starten(ziel)
+        app_health(ziel)
         _log("fertig", f"MqlGoldscanner liegt unter {zugang['ziel']} "
-                       f"(laeuft als {zugang['ziel_user']}: App 8505, "
-                       "REST 8606 lazy, Daemon-Task + App-Autostart).")
+                       f"(App startet {zugang['ziel_user']} per Doppelklick: "
+                       ":8505, REST :8606 lazy, Daemon-Task aktiv).")
     finally:
         ziel.close()
 
