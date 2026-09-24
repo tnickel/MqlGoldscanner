@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / "src"))
 import streamlit as st  # noqa: E402
 
 from goldscanner import config, secrets_store  # noqa: E402
+from goldscanner.betrieb import daemon  # noqa: E402
 from goldscanner.ui_design import apply_theme  # noqa: E402
 
 st.set_page_config(
@@ -84,6 +85,15 @@ with st.sidebar:
         st.caption("Bewegungstag: TR > 1,0× Ø-TR des Wochentags (13 Wochen)")
 
 # --------------------------------------------------------------- Navigation
+# Automatik-Status live: Daemon läuft → grün "ok", sonst rot "aus".
+daemon_aktiv = False
+try:
+    daemon_aktiv = daemon.laeuft()
+except Exception:
+    pass
+automatik_titel = ("Automatik · ok 🟢" if daemon_aktiv
+                   else "Automatik · aus 🔴")
+
 seiten = {
     "Arbeitsbereich": [
         st.Page("app_pages/dashboard.py", title="Dashboard", icon=":material/dashboard:"),
@@ -95,7 +105,7 @@ seiten = {
         st.Page("app_pages/track_record.py", title="Track-Record", icon=":material/verified:"),
     ],
     "Konfiguration": [
-        st.Page("app_pages/automatik.py", title="Automatik", icon=":material/schedule:"),
+        st.Page("app_pages/automatik.py", title=automatik_titel, icon=":material/schedule:"),
         st.Page("app_pages/einstellungen.py", title="Einstellungen", icon=":material/settings:"),
     ],
 }
