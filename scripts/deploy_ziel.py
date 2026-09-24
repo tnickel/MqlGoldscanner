@@ -123,6 +123,8 @@ class Ziel:
         for eintrag in sorted(lokal.iterdir()):
             if eintrag.name in ordner_aus or eintrag.name in dateien_aus:
                 continue
+            if eintrag.is_symlink():
+                continue              # kaputte Repo-Symlinks (JAR-Reste)
             ziel_pfad = f"{remote}/{eintrag.name}"
             if eintrag.is_dir():
                 h, g = self.sync_ordner(eintrag, ziel_pfad, ordner_aus,
