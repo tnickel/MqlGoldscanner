@@ -91,6 +91,7 @@ seiten = {
         st.Page("app_pages/track_record.py", title="Track-Record", icon=":material/verified:"),
     ],
     "Konfiguration": [
+        st.Page("app_pages/automatik.py", title="Automatik", icon=":material/schedule:"),
         st.Page("app_pages/einstellungen.py", title="Einstellungen", icon=":material/settings:"),
     ],
 }

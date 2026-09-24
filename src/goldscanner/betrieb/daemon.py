@@ -2,7 +2,8 @@
 Konzept §10 — Herzschlag in die DB, Merker gegen Wiederholung, Lock gegen
 GUI-Doppelläufe, kooperativer Stopp über eine Stop-Datei.
 
-Rhythmus:
+Rhythmus (Wochentage/Uhrzeiten konfigurierbar — Automatik-Seite bzw.
+app_settings.json, Keys daemon_*_tag/_zeit):
 - Scout       So 17:00  (Quellen-Vorschläge)
 - Wochenlauf  So 18:00  (komplett inkl. KI-Fusion, PDF, MT5-Export)
 - Tageslauf   tägl. 06:30  (Kurse, Kalender, Actuals)
@@ -22,7 +23,6 @@ import sys
 import time
 import traceback
 from datetime import datetime, timedelta
-from pathlib import Path
 
 from .. import config
 from ..db import Db
@@ -34,12 +34,16 @@ LOG_DATEI = config.DATA_DIR / "daemon.log"
 HERZSCHLAG_S = 300
 SCHLEIFE_S = 30
 
-# job → (wochentag None=täglich, stunde, minute)
-ZEITPLAN: dict[str, tuple[int | None, int, int]] = {
-    "scout": (6, 17, 0),           # Sonntag 17:00
-    "wochenlauf": (6, 18, 0),      # Sonntag 18:00
-    "tageslauf": (None, 6, 30),    # täglich 06:30
-    "verifikation": (5, 9, 0),     # Samstag 09:00
+WOCHENTAGE = {"Montag": 0, "Dienstag": 1, "Mittwoch": 2, "Donnerstag": 3,
+              "Freitag": 4, "Samstag": 5, "Sonntag": 6}
+# Alias → (Setting-Tag, Setting-Uhrzeit, Default-Tag, Default-Zeit);
+# tageslauf hat keinen Wochentag (läuft täglich).
+_ZEIT_KEYS = {
+    "scout": ("daemon_scout_tag", "daemon_scout_zeit", "Sonntag", "17:00"),
+    "wochenlauf": ("daemon_wochenlauf_tag", "daemon_wochenlauf_zeit",
+                   "Sonntag", "18:00"),
+    "verifikation": ("daemon_verifikation_tag", "daemon_verifikation_zeit",
+                     "Samstag", "09:00"),
 }
 
 
@@ -53,9 +57,40 @@ def _log(text: str) -> None:
         pass
 
 
-def geplant_fuer(job: str, jetzt: datetime) -> datetime:
+def _stunde_minute(zeit: str, fallback: str) -> tuple[int, int]:
+    try:
+        teile = str(zeit).strip().split(":")
+        return int(teile[0]), int(teile[1])
+    except (ValueError, IndexError, AttributeError):
+        teile = fallback.split(":")
+        return int(teile[0]), int(teile[1])
+
+
+def zeitplan(settings: dict | None = None) -> dict[str, tuple[int | None, int, int]]:
+    """job → (wochentag None=täglich, stunde, minute) — aus den Settings
+    (Wochentag als Wort, Zeit 'HH:MM'); ungültige Werte fallen auf die
+    Defaults zurück. Wird je Daemon-Loop neu gelesen, damit Änderungen
+    aus der Automatik-Seite ohne Neustart greifen."""
+    settings = settings if settings is not None else config.load_settings()
+    plan: dict[str, tuple[int | None, int, int]] = {
+        "tageslauf": (None, *_stunde_minute(
+            settings.get("daemon_tageslauf_zeit", "06:30"), "06:30")),
+    }
+    defaults = config.DEFAULT_SETTINGS
+    for job, (key_tag, key_zeit, def_tag, def_zeit) in _ZEIT_KEYS.items():
+        tag = str(settings.get(key_tag, def_tag)).strip()
+        wt = WOCHENTAGE.get(tag.capitalize())
+        if wt is None:                      # Tippfehler → Default-Tag
+            wt = WOCHENTAGE[str(defaults[key_tag])]
+        h, m = _stunde_minute(settings.get(key_zeit, def_zeit), def_zeit)
+        plan[job] = (wt, h, m)
+    return plan
+
+
+def geplant_fuer(job: str, jetzt: datetime,
+                 plan: dict | None = None) -> datetime:
     """Letzter vergangener Termin des Jobs (<= jetzt)."""
-    wt, stunde, minute = ZEITPLAN[job]
+    wt, stunde, minute = (plan or zeitplan())[job]
     kandidat = jetzt.replace(hour=stunde, minute=minute, second=0, microsecond=0)
     if wt is not None:
         while kandidat.weekday() != wt:
@@ -68,9 +103,10 @@ def geplant_fuer(job: str, jetzt: datetime) -> datetime:
     return kandidat
 
 
-def faellig(job: str, zuletzt: str | None, jetzt: datetime) -> bool:
+def faellig(job: str, zuletzt: str | None, jetzt: datetime,
+            plan: dict | None = None) -> bool:
     """True, wenn der Termin seit dem letzten Lauf erreicht wurde."""
-    termin = geplant_fuer(job, jetzt)
+    termin = geplant_fuer(job, jetzt, plan)
     if zuletzt is None:
         # Beim ersten Start: nur nachholen, wenn der Termin heute war
         return jetzt - termin < timedelta(hours=6)
@@ -144,8 +180,9 @@ def hauptschleife() -> None:
     if STOP_DATEI.exists():
         STOP_DATEI.unlink()
     db = Db()
+    settings = config.load_settings()
     _log("Daemon gestartet (PID "
-         f"{os.getpid()}), Zeitplan: {', '.join(ZEITPLAN)}")
+         f"{os.getpid()}), Zeitplan: {', '.join(zeitplan(settings))}")
     db.daemon_status_schreiben("daemon", True, "gestartet")
     letzter_herzschlag = 0.0
     try:
@@ -156,9 +193,11 @@ def hauptschleife() -> None:
                 db.daemon_status_schreiben("daemon", True, "gestoppt (kooperativ)")
                 break
             jetzt = datetime.now()
+            settings = config.load_settings()   # je Loop: UI-Änderungen greifen
+            plan = zeitplan(settings)
             zeiten = db.daemon_zeiten()
             for job, fn in JOBS.items():
-                if not faellig(job, zeiten.get(job), jetzt):
+                if not faellig(job, zeiten.get(job), jetzt, plan):
                     continue
                 _log(f"Job {job} startet …")
                 try:

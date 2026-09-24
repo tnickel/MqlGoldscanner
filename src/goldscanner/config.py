@@ -68,6 +68,14 @@ DEFAULT_SETTINGS: dict = {
     "news_max_items_llm": 80,      # Obergrenze je Destillations-Aufruf
     # Ausbau (S7)
     "rest_api_port": 8606,         # read-only localhost REST; 0 = aus
+    # ── Daemon / Automatik (S6; Wochentag = Montag..Sonntag) ───────────
+    "daemon_tageslauf_zeit": "06:30",          # täglich
+    "daemon_scout_tag": "Sonntag",
+    "daemon_scout_zeit": "17:00",
+    "daemon_wochenlauf_tag": "Sonntag",
+    "daemon_wochenlauf_zeit": "18:00",
+    "daemon_verifikation_tag": "Samstag",
+    "daemon_verifikation_zeit": "09:00",
 }
 
 
