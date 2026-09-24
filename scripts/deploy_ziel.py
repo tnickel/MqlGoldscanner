@@ -32,10 +32,11 @@ from pathlib import Path
 import paramiko
 
 ROOT = Path(__file__).resolve().parents[1]
-INSTALLER = ROOT / "deploy-cache" / "python-3.12.10-amd64.exe"
-INSTALLER_URL = ("https://www.python.org/ftp/python/3.12.10/"
-                 "python-3.12.10-amd64.exe")
+NUGET = ROOT / "deploy-cache" / "python-3.12.10.nupkg"
+NUGET_URL = "https://www.nuget.org/api/v2/package/python/3.12.10"
+TOOLS_PY = "TOOLS-PYTHON/python.exe"
 ERWARTETER_HOSTNAME = "ZIELRECHNER"
+ZIEL_USER = "<ziel_user>"   # Desktop-Session des Nutzers auf dem Zielrechner
 
 CODE_ORDNER_AUS = {".git", "__pycache__", ".venv", "deploy-cache", "data",
                    "node_modules", ".pytest_cache", ".ruff_cache",
@@ -149,46 +150,56 @@ def hostname_absichern(ziel: Ziel) -> None:
         raise SystemExit(f"ABBRUCH — falscher Rechner! '{name}' != '{erwartet}'.")
 
 
-def python_sicherstellen(ziel: Ziel) -> str:
-    """Kandidat-Pfad VOR PATH pruefen (SSH-Dienste sehen HKCU-Aenderungen
-    evtl. erst nach Dienst-Neustart)."""
-    kandidat = ("C:/Users/" + ziel.zugang["user"]
-                + "/AppData/Local/Programs/Python/Python312/python.exe")
-    try:
-        ziel.sftp.stat(kandidat)
-        out, _, _ = ziel.run(f'"{kandidat}" --version')
-        _log("python", f"vorhanden: {out.strip()}")
-        return kandidat
-    except FileNotFoundError:
-        pass
-    out, _, _ = ziel.ps("$ErrorActionPreference = 'SilentlyContinue'; "
-                        "if (Get-Command python -ErrorAction SilentlyContinue) "
-                        "{ & python -c 'import sys; print(sys.executable)'; "
-                        "& python --version }")
-    zeilen = [z.strip() for z in out.splitlines() if z.strip()]
-    if zeilen and any(z.startswith("Python 3.1") for z in zeilen):
-        _log("python", f"vorhanden: {zeilen[0]} ({zeilen[-1]})")
-        return zeilen[0]
-    if not INSTALLER.exists():
-        raise SystemExit(f"Installer fehlt: {INSTALLER} — einmal laden: "
-                         f"curl -L -o \"{INSTALLER}\" {INSTALLER_URL}")
-    _log("python", "stiller Install 3.12.10 (per-user) …")
-    remote_installer = "C:/Users/Public/python-3.12.10-amd64.exe"
-    ziel.sftp.put(str(INSTALLER), remote_installer)
-    ziel.run(f'"{remote_installer.replace("/", chr(92))}" /quiet '
-             f"InstallAllUsers=0 PrependPath=1 Include_test=0 "
-             f"Include_launcher=1", timeout=600)
-    deadline = time.time() + 300
-    while time.time() < deadline:
-        try:
-            ziel.sftp.stat(kandidat)
-            break
-        except FileNotFoundError:
-            time.sleep(3)
+def tools_python_sicherstellen(ziel: Ziel) -> str:
+    """Portables Python unter C:\\Forex\\Tools\\Python312 (NuGet-Paket,
+    ausserhalb der Nutzerprofile — laeuft auch in der TRADER-Session).
+
+    NuGet statt python.org-Installer: der Bootstrapper sieht ein
+    vorhandenes per-user-Python als 'bereits installiert' und tut dann
+    still nichts. NuGet-Python bringt pip NICHT mit -> einmal
+    ensurepip im Basis-Python, sonst bekommen die venvs kein pip."""
+    out, _, _ = ziel.run(f'"{TOOLS_PY}" --version')
+    if out.strip().startswith("Python 3.1"):
+        _log("python", f"vorhanden: {out.strip()} ({TOOLS_PY})")
     else:
-        raise SystemExit("Python-Installation nach 300 s nicht fertig.")
-    _log("python", f"installiert -> {kandidat}")
-    return kandidat
+        if not NUGET.exists():
+            raise SystemExit(f"NuGet-Paket fehlt lokal: {NUGET} — einmal "
+                             f'laden: curl -L -o "{NUGET}" {NUGET_URL}')
+        _log("python", "entpacke portables Python 3.12.10 nach "
+                       "C:\\Forex\\Tools\\Python312 …")
+        ziel.sftp.put(str(NUGET), "C:/Users/Public/python.nupkg.zip")
+        ziel.ps("Remove-Item -Recurse -Force C:\\Forex\\Tools\\Python312, "
+                "C:\\Forex\\Tools\\py_tmp -ErrorAction SilentlyContinue; "
+                "Expand-Archive -Path C:\\Users\\Public\\python.nupkg.zip "
+                "-DestinationPath C:\\Forex\\Tools\\py_tmp -Force; "
+                "New-Item -ItemType Directory -Force -Path "
+                "C:\\Forex\\Tools\\Python312 | Out-Null; "
+                "Move-Item C:\\Forex\\Tools\\py_tmp\\tools\\* "
+                "C:\\Forex\\Tools\\Python312\\; "
+                "Remove-Item -Recurse -Force C:\\Forex\\Tools\\py_tmp",
+                timeout=300)
+        out, err, _ = ziel.run(f'"{TOOLS_PY}" --version')
+        if not out.strip().startswith("Python"):
+            raise SystemExit(f"Tools-Python laeuft nicht: {out.strip()} "
+                             f"{err.strip()[:200]}")
+    out, _, _ = ziel.run(f'"{TOOLS_PY}" -m pip --version')
+    if "No module named pip" in out:
+        _log("python", "pip fehlt im Basis-Python -> ensurepip …")
+        ziel.run(f'"{TOOLS_PY}" -m ensurepip --upgrade', timeout=300)
+    _log("python", f"bereit: {TOOLS_PY}")
+    return TOOLS_PY
+
+
+def rechte_setzen(ziel: Ziel) -> None:
+    """Der Ziel-User (Trader-Session) braucht Vollzugriff auf Projekt und
+    Python — beide liegen im C:\\Forex-Baum, nicht in seinem Profil."""
+    for pfad in (ziel.ziel, "TOOLS-PYTHON"):
+        _, err, _ = ziel.run(
+            f'icacls "{pfad.replace("/", chr(92))}" '
+            f"/grant {ZIEL_USER}:(OI)(CI)F /T /C /Q", timeout=600)
+        _log("rechte", f"{pfad} -> {ZIEL_USER} voll"
+              + ("" if "fehler" not in (err or "").lower() else
+                 f" (Hinweis: {err[:100]})"))
 
 
 def db_lokal_spiegeln() -> Path:
@@ -274,9 +285,11 @@ def venv_und_pakete(ziel: Ziel, python_exe: str) -> None:
     _log("smoke", out.strip()[-120:] or err.strip()[-200:])
 
 
-def task_anlegen(ziel: Ziel, name: str, action: str, onstart: bool) -> None:
-    """Geplanter Task OHNE Zeitlimit (72-h-Default wuerde die App killen).
-    onstart=True: Autostart nach Reboot (Trading-Rechner)."""
+def task_anlegen(ziel: Ziel, name: str, bat: str, onstart: bool,
+                 minimiert_titel: str = "MqlGoldscanner") -> None:
+    """Task ALS ZIEL-USER (Trader-Session, Interactive ohne Passwort —
+    laeuft wenn trader angemeldet ist, der Normalzustand dort; Fenster
+    sind sichtbar). OHNE Zeitlimit: schtasks-Default killt nach 72 h."""
     trigger = ("$t = New-ScheduledTaskTrigger -AtStartup"
                if onstart else
                "$t = New-ScheduledTaskTrigger -Once -At "
@@ -284,28 +297,24 @@ def task_anlegen(ziel: Ziel, name: str, action: str, onstart: bool) -> None:
     skript = (
         f"$ErrorActionPreference = 'Stop'; {trigger}; "
         "$a = New-ScheduledTaskAction -Execute 'cmd.exe' "
-        f"-Argument '/c {action}'; "
+        f"-Argument '/c start \"{minimiert_titel}\" /min \"{bat}\"'; "
         "$s = New-ScheduledTaskSettingsSet -ExecutionTimeLimit "
         "(New-TimeSpan -Seconds 0) -AllowStartIfOnBatteries "
         "-DontStopIfGoingOnBatteries -StartWhenAvailable; "
-        "Register-ScheduledTask -TaskName '" + name + "' -Action $a "
-        "-Trigger $t -Settings $s -User '" + ziel.zugang["user"] + "' "
-        "-Password '" + ziel.zugang["password"] + "' -Force | Out-Null; "
-        "Write-Output 'angelegt'")
+        f"Register-ScheduledTask -TaskName '{name}' -Action $a -Trigger $t "
+        f"-Settings $s -User '{ZIEL_USER}' -Force | Out-Null; 'angelegt'")
     out, err, _ = ziel.ps(skript, timeout=90)
-    _log("task", f"{name}: {out.strip() or err.strip()[:200]}")
+    _log("task", f"{name}: {out.strip() or err.strip()[:160]}")
 
 
 def daemon_starten(ziel: Ziel) -> None:
-    """daemon.starte_detached() kapselt DETACHED_PROCESS — der Aufrufer
-    endet sofort, der Daemon überlebt die SSH-Session."""
-    venv_py = f"{ziel.ziel}/.venv/Scripts/python.exe"
-    out, err, _ = ziel.run(
-        f'"{venv_py}" -c "import sys; sys.path.insert(0, r\'{ziel.ziel}/src\'); '
-        "from goldscanner.betrieb import daemon; "
-        "print('gestartet' if daemon.starte_detached() else 'laeuft schon')\"",
-        timeout=120)
-    _log("daemon", out.strip() or err.strip()[:300])
+    """Daemon als TRADER über start_goldscanner_daemon.bat ( detached;
+    starte_detached() verhindert Doppelläufe selbst)."""
+    bat = ziel.ziel.replace("/", chr(92)) + "\\start_goldscanner_daemon.bat"
+    task_anlegen(ziel, "MqlGoldscanner Daemon", bat, onstart=True,
+                 minimiert_titel="Goldscanner-Daemon")
+    ziel.run('schtasks /Run /TN "MqlGoldscanner Daemon"')
+    _log("daemon", "Task angestossen (PID dann in data/daemon.pid)")
 
 
 def app_starten(ziel: Ziel) -> None:
@@ -351,15 +360,17 @@ def main() -> None:
               + ziel.run("hostname")[0].strip())
         python_exe = ""
         if not args.code_only:
-            python_exe = python_sicherstellen(ziel)
+            python_exe = tools_python_sicherstellen(ziel)
         sync(ziel)
         if not args.code_only:
             venv_und_pakete(ziel, python_exe)
+        rechte_setzen(ziel)
         if not args.kein_start:
             daemon_starten(ziel)
             app_starten(ziel)
         _log("fertig", f"MqlGoldscanner liegt unter {zugang['ziel']} "
-                       "(App 8505, REST 8606, Daemon automatisch).")
+                       f"(laeuft als {ZIEL_USER}: App 8505, REST 8606 lazy, "
+                       "Daemon-Task + App-Autostart).")
     finally:
         ziel.close()
 
