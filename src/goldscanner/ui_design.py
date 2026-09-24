@@ -521,11 +521,19 @@ def bewegungs_farbe(score: float) -> str:
     return _mix(gelb, rot, (score - 0.5) * 2)
 
 
+def qualitaets_farbe(score_0_100: float) -> str:
+    """Score-Skala 0-100: rot (schlecht) → gelb → grün (gut) — die
+    Umkehrung der Bewegungsskala (dort ist grün = ruhig)."""
+    return bewegungs_farbe(1.0 - max(0.0, min(100.0, float(score_0_100))) / 100.0)
+
+
 def kpi_karte_html(titel: str, wert: str, score: float | None,
-                   nebenzeile: str = "") -> str:
+                   nebenzeile: str = "", farbe: str | None = None) -> str:
     """KPI-Karte im KiScanner-Look mit Bewegungs-Skala: farbiger Balken
-    (Breite = score, grün→rot) statt nackter Zahl ohne Einordnung."""
-    farbe = bewegungs_farbe(score) if score is not None else "#94A3B8"
+    (Breite = score, grün→rot) statt nackter Zahl ohne Einordnung.
+    `farbe` überschreibt die Skalen-Farbe (z. B. qualitaets_farbe für
+    Scores, bei denen hoch = gut ist — die Balkenbreite bleibt score)."""
+    farbe = farbe or (bewegungs_farbe(score) if score is not None else "#94A3B8")
     balken = (f'<div class="gld-kpi-balken"><i style="width:{score * 100:.0f}%;'
               f'background:{farbe}"></i></div>' if score is not None else "")
     neben = (f'<div class="gld-kpi-neben">{html.escape(nebenzeile)}</div>'

@@ -658,14 +658,34 @@ karten.append(kpi_karte_html(
     "Events diese Woche (★≥4)", str(_relevante_events),
     min(_relevante_events / 6, 1.0),
     f"{hole_db().events_anzahl():,} gesamt in DB".replace(",", ".")))
+
+# Prognose-Qualität der abgelaufenen Woche (Samstags-Auswertung)
+_wberichte = hole_db().wochenberichte(2)
+if _wberichte:
+    from goldscanner.ui_design import qualitaets_farbe
+    _letzte_wb = _wberichte[-1]
+    if len(_wberichte) > 1:
+        _diff = _letzte_wb["score"] - _wberichte[-2]["score"]
+        _wb_neben = (f"{'▲' if _diff >= 0 else '▼'} {abs(_diff)} zur Vorwoche"
+                     f" · Woche ab {_letzte_wb['woche'][8:]}.")
+    else:
+        _wb_neben = (f"erste Auswertungswoche · Woche ab "
+                     f"{_letzte_wb['woche'][8:]}.")
+    karten.append(kpi_karte_html(
+        "Prognose-Score · abgelaufene Woche", f"{_letzte_wb['score']}/100",
+        _letzte_wb["score"] / 100.0, _wb_neben,
+        farbe=qualitaets_farbe(_letzte_wb["score"])))
+
 st.markdown(kpi_zeile_html(karten), unsafe_allow_html=True)
 _kpi_links, _kpi_i = st.columns([8, 0.3], gap="small")
 with _kpi_i:
     _info_button("kpi_kennzahlen", kkey="kpi")
 if quelle:
     st.caption(f"Kursgrundlage: {quelle} · Skala: grün = ruhig, rot = viel "
-               "Bewegung (gegen die eigene 12-Monats-Historie) · "
-               "Zeitangaben = MT5-Serverzeit")
+               "Bewegung (gegen die eigene 12-Monats-Historie)"
+               + (" · Prognose-Score: grün = gute Trefferqualität"
+                  if _wberichte else "")
+               + " · Zeitangaben = MT5-Serverzeit")
 
 st.divider()
 

@@ -6,7 +6,9 @@ Rhythmus:
 - Scout       So 17:00  (Quellen-Vorschläge)
 - Wochenlauf  So 18:00  (komplett inkl. KI-Fusion, PDF, MT5-Export)
 - Tageslauf   tägl. 06:30  (Kurse, Kalender, Actuals)
-- Verifikation Sa 09:00  (Prognose → Realität, Track-Record füllen)
+- Verifikation Sa 09:00  (Prognose → Realität, Wochen-Score 0-100,
+                          LLM-Review; Lessons fließen in die Sonntags-
+                          Fusion ein)
 
 Start:  python -m goldscanner.betrieb.daemon   (aus src/)
 Stopp:  Datei data/daemon.stop anlegen (UI-Button) — Daemon beendet sich
@@ -112,10 +114,18 @@ def job_wochenlauf(db, settings: dict) -> str:
 
 
 def job_verifikation(db, settings: dict) -> str:
-    from . import verifikation
+    from . import auswertung, verifikation
     prot = verifikation.nachziehen(db, settings)
-    return (f"neu={prot.get('neu', 0)} · ohne_prognose="
+    aus = auswertung.laeuft(db, settings)
+    info = (f"neu={prot.get('neu', 0)} · ohne_prognose="
             f"{prot.get('ohne_prognose', 0)}")
+    if aus.get("score_letzte") is not None:
+        info += (f" · wochenscore={aus['score_letzte']}/100"
+                 f" · review={'ok' if aus.get('review_ok') else 'aus'}")
+    else:
+        info += " · auswertung=" + ("keine bewertbare Woche"
+                                    if aus.get("ok") else str(aus.get("grund", "?")))
+    return info
 
 
 def job_scout(db, settings: dict) -> str:

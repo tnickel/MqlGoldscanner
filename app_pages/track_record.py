@@ -19,7 +19,8 @@ import streamlit as st
 from goldscanner import config
 from goldscanner.app_state import hole_db
 from goldscanner.betrieb import daemon, verifikation
-from goldscanner.ui_design import page_header, status_feed
+from goldscanner.betrieb.auswertung import laeuft as auswertung_laeuft
+from goldscanner.ui_design import page_header, qualitaets_farbe, status_feed
 
 page_header(
     "Track-Record",
@@ -28,8 +29,9 @@ page_header(
     "Zeitpunkt galt** (point-in-time aus den as_of-versionierten Matrizen — kein "
     "Look-ahead auch in der Auswertung). Bewegungstag = TR > Schwelle B der "
     "damaligen Prognose; Richtung = Close > Vortag; Range-Coverage = TR "
-    "innerhalb Q10–Q90. Der Verifikations-Agent läuft Samstags 09:00 im Daemon "
-    "oder per Knopfdruck.",
+    "innerhalb Q10–Q90. Samstags 09:00 entstehen daraus der **Prognose-Score "
+    "0-100** je Woche und ein KI-Review, dessen Lessons in den Sonntagslauf "
+    "zurückfließen.",
 )
 
 settings = config.load_settings()
@@ -37,17 +39,21 @@ db = hole_db()
 
 oben, unten = st.columns([1, 1], gap="medium", vertical_alignment="center")
 with oben:
-    if st.button("Verifikation jetzt nachziehen", type="primary",
+    if st.button("Verifikation + Wochen-Auswertung", type="primary",
                  icon=":material/fact_check:"):
         prot = verifikation.nachziehen(db, settings)
-        st.toast(f"{prot.get('neu', 0)} Tage verifiziert "
+        aus = auswertung_laeuft(db, settings)
+        score_txt = (f" · Score {aus['score_letzte']}/100"
+                     if aus.get("score_letzte") is not None else "")
+        st.toast(f"{prot.get('neu', 0)} Tage verifiziert{score_txt} "
                  f"({prot.get('ohne_prognose', 0)} ohne passende Prognose)",
                  icon=":material/check_circle:")
         st.rerun()
 with unten:
     st.caption("Bewertet werden Tage mit vollständiger Kerze (heute selbst erst "
                "morgen). Ohne gespeicherte Prognose (z. B. vor dem ersten "
-               "Wochenlauf) wird ein Tag übersprungen.")
+               "Wochenlauf) wird ein Tag übersprungen. Der Knopf macht exakt "
+               "das, was der Daemon samstags 09:00 automatisch tut.")
 
 zeilen = db.verifikationen()
 kz = verifikation.kennzahlen(zeilen)
@@ -93,6 +99,150 @@ with k5:
               help="Anteil der Tage, deren echte TR im prognostizierten Band "
                    "lag — idealerweise ~80 %.",
               border=True)
+
+# ── Prognose-Score 0-100 (Samstags-Auswertung) ─────────────────────────────
+st.divider()
+st.subheader("Prognose-Score 0-100", width="content")
+berichte = db.wochenberichte()
+if not berichte:
+    st.info("Noch kein Wochen-Score. Er entsteht automatisch mit der ersten "
+            "vollständig verifizierten Woche — Samstags 09:00 im Daemon oder "
+            "per Knopf oben. Grundlage ist je Tag eine Note aus Bewegung "
+            "(40 P.), Richtung (40 P.) und Range-Band (20 P.); der Wochen-"
+            "Score ist der Durchschnitt der Tagesnoten.")
+else:
+    letzte = db.wochenbericht(berichte[-1]["woche"]) or {}
+    score = letzte.get("score")
+    n_tage = letzte.get("n_tage", 0)
+    tage_wort = "Tag" if n_tage == 1 else "Tage"
+    wochen_label = (f"Woche {letzte['woche'][8:]}.–"
+                    f"{int(letzte['woche'][8:]) + 4:02d}.{letzte['woche'][5:7]}")
+    st.caption("Tagesnote je Tag aus Bewegung (40 P.) · Richtung (40 P.) · "
+               "Band (20 P.) — fehlende Bausteine werden wegnormiert. "
+               "Wochen-Score = Ø der Tagesnoten. ~50 entspricht Münzwurf-"
+               "Niveau, deutlich darüber liefert das System echten Mehrwert.")
+
+    kopf_links, kopf_rechts = st.columns([1, 2.2], gap="large",
+                                         vertical_alignment="center")
+    with kopf_links:
+        trend_html = ""
+        if len(berichte) > 1:
+            diff = score - berichte[-2]["score"]
+            pfeil = "▲" if diff >= 0 else "▼"
+            trend_html = (f'<span style="color:{qualitaets_farbe(50 + diff)};'
+                          f'font-weight:700">{pfeil} {abs(diff)} zur Vorwoche'
+                          f'</span>')
+        st.markdown(
+            f'<div style="line-height:1.05"><span style="font-size:3.2rem;'
+            f'font-weight:800;color:{qualitaets_farbe(score)}">{score}</span>'
+            f'<span style="font-size:1.4rem;color:#7C8DA6">/100</span></div>'
+            f'<div style="color:#94A3B8;font-size:.85rem;margin-top:.2rem">'
+            f'{wochen_label} · {n_tage} {tage_wort}'
+            + (f' · {trend_html}' if trend_html else "") + "</div>",
+            unsafe_allow_html=True)
+    with kopf_rechts:
+        ts = letzte.get("teilscores") or {}
+        t1, t2, t3 = st.columns(3, gap="small")
+        with t1:
+            st.metric("Bewegung", f"{ts.get('bewegung') if ts.get('bewegung') is not None else '–'} / 100",
+                      border=True, help="Waren die Bewegungstag-Wahrscheinlichkeiten richtig? "
+                                        "Bewertet auf der höchsten Ebene, die zur Prognosezeit "
+                                        "galt (KI-Fusion → Statistik → Klimatologie).")
+        with t2:
+            st.metric("Richtung", f"{ts.get('richtung') if ts.get('richtung') is not None else '–'} / 100",
+                      border=True, help="P(hoch) vs. tatsächlich Close höher als Vortag.")
+        with t3:
+            st.metric("Band", f"{ts.get('band') if ts.get('band') is not None else '–'} / 100",
+                      border=True, help="Lag die echte Tagesrange in Q10–Q90 der Prognose?")
+
+    chart_links, chart_rechts = st.columns([1, 1], gap="large")
+    with chart_links:
+        st.markdown("**Wochen-Score im Zeitverlauf**")
+        fig_w = go.Figure()
+        fig_w.add_trace(go.Bar(
+            x=[f"{int(b['woche'][8:]):02d}.{b['woche'][5:7]}" for b in berichte],
+            y=[b["score"] for b in berichte],
+            marker_color=[qualitaets_farbe(b["score"]) for b in berichte],
+            marker_line=dict(color="#0B1220", width=1),
+            text=[b["score"] for b in berichte], textposition="outside",
+            customdata=[[b["n_tage"], b["woche"]] for b in berichte],
+            hovertemplate="%{customdata[1]} · %{y}/100 · %{customdata[0]} Tage"
+                          "<extra></extra>"))
+        if len(berichte) > 1:
+            mittel = sum(b["score"] for b in berichte) / len(berichte)
+            fig_w.add_hline(y=mittel, line=dict(color="#94A3B8", dash="dash"),
+                            annotation_text=f"Ø {mittel:.0f}",
+                            annotation_font_color="#94A3B8")
+        fig_w.update_layout(
+            template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)", height=300, showlegend=False,
+            margin=dict(t=10, b=0),
+            yaxis=dict(range=[0, 108], gridcolor="#273E5B", title="Score"),
+            xaxis=dict(gridcolor="#273E5B"))
+        st.plotly_chart(fig_w, use_container_width=True)
+    with chart_rechts:
+        st.markdown(f"**Tagesnoten der letzten Woche** ({wochen_label})")
+        tage_lw = letzte.get("tagesnoten") or []
+        fig_t = go.Figure()
+        if tage_lw:
+            fig_t.add_trace(go.Bar(
+                x=[t["wochentag"][:2] for t in tage_lw],
+                y=[t["note"] for t in tage_lw],
+                marker_color=[qualitaets_farbe(t["note"]) for t in tage_lw],
+                marker_line=dict(color="#0B1220", width=1),
+                text=[t["note"] for t in tage_lw], textposition="outside",
+                customdata=[[t["datum"],
+                             t.get("tr_usd"), t.get("schwelle_usd"),
+                             t["note"]] for t in tage_lw],
+                hovertemplate=("%{customdata[0]} · Note %{customdata[3]}/100 · "
+                               "TR %{customdata[1]:.0f} USD "
+                               "(Schwelle %{customdata[2]:.0f})"
+                               "<extra></extra>")))
+        fig_t.update_layout(
+            template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)", height=300, showlegend=False,
+            margin=dict(t=10, b=0),
+            yaxis=dict(range=[0, 108], gridcolor="#273E5B", title="Note"),
+            xaxis=dict(gridcolor="#273E5B"))
+        st.plotly_chart(fig_t, use_container_width=True)
+
+    # KI-Review: Fazit + Lessons der letzten Woche, ältere im Expander
+    stimmung_farbe = {"gut": "#10B981", "durchschnittlich": "#E8B84B",
+                      "schwach": "#F43F5E"}
+    if letzte.get("fazit"):
+        with st.container(border=True):
+            k1r, k2r = st.columns([3, 1], gap="small",
+                                  vertical_alignment="center")
+            with k2r:
+                st.markdown(
+                    f'<div style="text-align:right"><span style="color:'
+                    f'{stimmung_farbe.get(letzte.get("stimmung"), "#94A3B8")};'
+                    f'font-weight:700">● {letzte.get("stimmung", "?")}</span>'
+                    f'<div style="color:#7C8DA6;font-size:.75rem">KI-Review '
+                    + (f'{letzte["as_of_review"][:10]}' if letzte.get("as_of_review") else "")
+                    + "</div></div>", unsafe_allow_html=True)
+            with k1r:
+                st.markdown("**KI-Fazit zur Woche** — was das Review sagt:")
+                st.markdown(letzte["fazit"])
+            lessons = letzte.get("lessons") or []
+            if lessons:
+                st.markdown("**Lessons für die nächste Prognose** "
+                            "(fließen in die Sonntags-Fusion ein):")
+                for lesson in lessons:
+                    st.markdown(f"- {lesson}")
+    else:
+        st.caption("KI-Review steht für diese Woche noch aus — es entsteht "
+                   "automatisch samstags bzw. per Knopf oben, sobald ein "
+                   "GLM-Key gesetzt ist. Der Score selbst ist bereits "
+                   "vollständig (reine Formel, kein LLM nötig).")
+    alte = [b for b in berichte[:-1] if b.get("fazit")]
+    if alte:
+        with st.expander(f"Frühere KI-Reviews ({len(alte)})", expanded=False):
+            alte.sort(key=lambda b: b["woche"], reverse=True)
+            for b in alte:
+                st.markdown(f"**{b['woche']}** · Score {b['score']}/100 · "
+                            f"● {b.get('stimmung', '?')}")
+                st.caption(b["fazit"])
 
 links, rechts = st.columns([1, 1], gap="large")
 with links:
@@ -191,8 +341,9 @@ with d2:
             st.rerun()
 with d3:
     st.caption("Zeitplan: Tageslauf 06:30 · Scout So 17:00 · Wochenlauf So 18:00 "
-               "· Verifikation Sa 09:00. Der Daemon überlebt das Schließen der "
-               "UI und schützt Läufe mit Locks gegen Doppelausführung.")
+               "· Verifikation + Auswertung Sa 09:00. Der Daemon überlebt das "
+               "Schließen der UI und schützt Läufe mit Locks gegen "
+               "Doppelausführung.")
 
 with st.container(border=True):
     st.markdown("**Letzte Daemon-Meldungen**")

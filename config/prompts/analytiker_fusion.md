@@ -23,6 +23,12 @@ Extrem ist historisch oft KONTRA-Indikator):
 
 {community_json}
 
+## Lessons aus der letzten Prognose-Auswertung (Samstags-Review des
+Wochen-Scores — Verhaltensregeln, die aus echten Prognose-Fehlern der
+Vergangenheit abgeleitet wurden):
+
+{lessons}
+
 Heute ist {heute}.
 
 # Regeln — unbedingt einhalten
@@ -43,7 +49,11 @@ Heute ist {heute}.
    Bewegung). Die Summe sollte grob deiner Abweichung entsprechen.
    Halte ALLE Texte knapp: "begruendung" maximal 40 Wörter, Treiber-"name"
    maximal 5 Wörter.
-6. Antwort NUR als gültiges JSON, keine Einleitung, kein Codezaun.
+6. **Lessons berücksichtigen:** Wenn die Samstags-Auswertung konkrete
+   systematische Schwächen benennt (z. B. "Bewegung an Event-Tagen
+   überschätzt"), darfst du das über deine Abweichung innerhalb der
+   Band-Disziplin (Regel 1) einarbeiten — nicht darüber hinaus.
+7. Antwort NUR als gültiges JSON, keine Einleitung, kein Codezaun.
 
 # Ausgabe-Format
 

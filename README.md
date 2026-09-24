@@ -53,10 +53,11 @@ Dashboard, Gold-Akzente). Statistik zuerst, LLM gewichtet erklärt.
 | ✅ | Quellen-Launch-Check: 16 verifizierte Kern-URLs mit Typ-/Signaturprüfung |
 | ✅ | **Daemon (S6)**: unabhängiger Prozess mit Zeitplan (Tageslauf 06:30 · Scout So 17:00 · Wochenlauf So 18:00 · Verifikation Sa 09:00), Herzschlag, Locks gegen Doppelläufe, kooperativer Stopp — Steuerung auf der Track-Record-Seite |
 | ✅ | **Verifikations-Agent + Track-Record (S6)**: jeder vergangene Tag wird gegen die point-in-time-Prognose geprüft (TR vs. Schwelle B, Richtung, Range-Coverage) — Reliability-Diagramm, Brier je Ebene, **LLM-Delta-Nutzt (Tor T4)** füllen sich automatisch |
+| ✅ | **Wochen-Auswertung (S6)**: **Prognose-Score 0-100** je Tag (Bewegung 40 / Richtung 40 / Band 20 P.) → Wochen-Score + Trend, Dashboard-Kachel; **KI-Review (GLM)** liefert samstags Fazit + max. 3 Lessons, die in die Sonntags-Fusion zurückfließen (Lernschleife) |
 | ✅ | **MT5-Export (S6)**: Prognosen als CSV in den Terminal-Common-Files für eigene EAs (Handelsfilter/Lot-Größe) + lokale Kopie |
 | ✅ | **URL-Scout (S6)**: bewertete Quellen-Vorschläge aus Google-News-RSS (ohne Such-API-Key) mit Annehmen/Ablehnen |
-| ✅ | SQLite (versioniert, Schema v6), Audit-Journal mit vollem Prompt/Antwort je LLM-Schritt, Prognose-Versionen (as_of) |
-| ✅ | 94 pytest-Ankertests (u. a. HAR-Parameter-Recovery, Brier/BSS-Anker, Band-Disziplin, JSON-Validierung, PDF-Smoke, Daemon-Zeitplan, Point-in-Time-Verifikation, Kein-Look-ahead) |
+| ✅ | SQLite (versioniert, Schema v7), Audit-Journal mit vollem Prompt/Antwort je LLM-Schritt, Prognose-Versionen (as_of) |
+| ✅ | 106 pytest-Ankertests (u. a. HAR-Parameter-Recovery, Brier/BSS-Anker, Band-Disziplin, JSON-Validierung, PDF-Smoke, Daemon-Zeitplan, Point-in-Time-Verifikation, Kein-Look-ahead, Tagesnote/Wochen-Score) |
 
 **Tor T2 bestanden:** eigene Klimatologie auf Brokerdaten (1.001 Tage Tickmill XAUUSD)
 = 41,2 % Bewegungstage (Bericht: ~43 % auf Futures) bei identischer Wochentags-Struktur

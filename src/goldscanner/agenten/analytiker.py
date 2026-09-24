@@ -113,10 +113,14 @@ def fusioniere(db, settings: dict, client: GlmClient, matrix: dict,
         return {"ok": False, "grund": "Matrix ohne Wahrscheinlichkeiten — "
                                       "kein Anker für die Fusion."}
     band_pp = float(settings.get("llm_band_pp", 10.0))
+    lessons = db.lessons_letzte()
+    lessons_text = (json.dumps(lessons, ensure_ascii=False) if lessons
+                    else "(noch keine — erste Samstags-Auswertung steht aus)")
 
     template = assert_template_covered(
         load_prompt("analytiker_fusion"),
-        ("{matrix_json}", "{news_json}", "{community_json}", "{heute}", "{band_pp}"),
+        ("{matrix_json}", "{news_json}", "{community_json}", "{lessons}",
+         "{heute}", "{band_pp}"),
         "analytiker_fusion")
     prompt = fill_prompt(template, {
         "{matrix_json}": json.dumps(tage_kompakt, ensure_ascii=False),
@@ -127,6 +131,7 @@ def fusioniere(db, settings: dict, client: GlmClient, matrix: dict,
              if k in ("konsens_richtung", "einigkeit", "wichtige_levels",
                       "retail_bias_warnung", "volatilitaet_effekt", "erklaerung")},
             ensure_ascii=False),
+        "{lessons}": lessons_text,
         "{heute}": date.today().isoformat(),
         "{band_pp}": f"{band_pp:.0f}",
     })

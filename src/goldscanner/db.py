@@ -12,7 +12,7 @@ from pathlib import Path
 
 from . import config
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
@@ -86,6 +86,11 @@ CREATE TABLE IF NOT EXISTS scout_vorschlaege (
     id INTEGER PRIMARY KEY AUTOINCREMENT, zeit TEXT NOT NULL, domain TEXT NOT NULL,
     score INTEGER, beispiel_titel TEXT, status TEXT NOT NULL DEFAULT 'offen',
     UNIQUE(domain, zeit));
+CREATE TABLE IF NOT EXISTS wochenberichte (
+    woche TEXT PRIMARY KEY, score INTEGER NOT NULL,
+    teilscores TEXT NOT NULL, tagesnoten TEXT NOT NULL, n_tage INTEGER NOT NULL,
+    fazit TEXT, lessons TEXT, stimmung TEXT, review_modell TEXT,
+    erstellt_at TEXT NOT NULL, as_of_review TEXT);
 """
 
 
@@ -452,6 +457,86 @@ class Db:
         with self._lock:
             zeilen = self._con.execute(sql).fetchall()
         return [dict(r) for r in zeilen]
+
+    # ── Wochenberichte (S6: Prognose-Score 0-100 + LLM-Review) ──────────
+    def wochenbericht_speichern(self, bericht: dict) -> None:
+        """Score/Teilscores/Tagesnoten einer Woche upserten — ein
+        vorhandenes Review bleibt dabei unangetastet (wird separat über
+        wochenbericht_review_speichern nachgereicht)."""
+        import json as _json
+        with self._lock:
+            self._con.execute(
+                "INSERT INTO wochenberichte(woche,score,teilscores,tagesnoten,"
+                "n_tage,erstellt_at) VALUES (?,?,?,?,?,?) "
+                "ON CONFLICT(woche) DO UPDATE SET score=excluded.score,"
+                "teilscores=excluded.teilscores,tagesnoten=excluded.tagesnoten,"
+                "n_tage=excluded.n_tage",
+                (bericht["woche"], int(bericht["score"]),
+                 _json.dumps(bericht.get("teilscores") or {}, ensure_ascii=False),
+                 _json.dumps(bericht.get("tage") or [], ensure_ascii=False),
+                 int(bericht["n_tage"]), _jetzt()))
+            self._con.commit()
+
+    def wochenbericht_review_speichern(self, woche: str, review: dict) -> None:
+        import json as _json
+        with self._lock:
+            self._con.execute(
+                "UPDATE wochenberichte SET fazit=?, lessons=?, stimmung=?, "
+                "review_modell=?, as_of_review=? WHERE woche=?",
+                (review.get("fazit"), _json.dumps(review.get("lessons") or [],
+                                                  ensure_ascii=False),
+                 review.get("stimmung"), review.get("modell"), _jetzt(), woche))
+            self._con.commit()
+
+    def wochenbericht(self, woche: str) -> dict | None:
+        import json as _json
+        with self._lock:
+            zeile = self._con.execute(
+                "SELECT * FROM wochenberichte WHERE woche=?", (woche,)).fetchone()
+        if zeile is None:
+            return None
+        out = dict(zeile)
+        for spalte in ("teilscores", "tagesnoten", "lessons"):
+            try:
+                out[spalte] = _json.loads(out.get(spalte) or
+                                          ("{}" if spalte == "teilscores" else "[]"))
+            except _json.JSONDecodeError:
+                out[spalte] = {} if spalte == "teilscores" else []
+        return out
+
+    def wochenberichte(self, limit: int = 60) -> list[dict]:
+        """Aufsteigend nach Woche — Chart- und Trendreihenfolge."""
+        import json as _json
+        with self._lock:
+            zeilen = self._con.execute(
+                "SELECT woche,score,n_tage,teilscores,fazit,stimmung,"
+                "as_of_review FROM wochenberichte "
+                "ORDER BY woche DESC LIMIT ?", (int(limit),)).fetchall()
+        aus = []
+        for z in reversed(zeilen):
+            zeile = dict(z)
+            try:
+                zeile["teilscores"] = _json.loads(zeile.get("teilscores") or "{}")
+            except _json.JSONDecodeError:
+                zeile["teilscores"] = {}
+            aus.append(zeile)
+        return aus
+
+    def lessons_letzte(self) -> list[str]:
+        """Lessons des jüngsten Wochenberichts MIT Review — Input für die
+        Fusion des Sonntagslaufs (Lernschleife)."""
+        import json as _json
+        with self._lock:
+            zeile = self._con.execute(
+                "SELECT lessons FROM wochenberichte WHERE fazit IS NOT NULL "
+                "ORDER BY woche DESC LIMIT 1").fetchone()
+        if zeile is None:
+            return []
+        try:
+            lessons = _json.loads(zeile["lessons"] or "[]")
+        except _json.JSONDecodeError:
+            return []
+        return [str(l) for l in lessons if str(l).strip()][:5]
 
     # ── Daemon (S6: Herzschlag + Job-Merker gegen Wiederholung) ─────────
     def daemon_status_schreiben(self, job: str, ok: bool, info: str = "") -> None:

@@ -192,8 +192,8 @@ def test_prompt_dateien_versorgt():
                          ("{items_json}", "{n_items}", "{fenster_tage}", "{heute}")),
                         ("community_destillation", ("{community_json}", "{heute}")),
                         ("analytiker_fusion", ("{matrix_json}", "{news_json}",
-                                               "{community_json}", "{heute}",
-                                               "{band_pp}"))):
+                                               "{community_json}", "{lessons}",
+                                               "{heute}", "{band_pp}"))):
         assert_template_covered(load_prompt(name), slots, name)
 
 
