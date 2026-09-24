@@ -57,6 +57,7 @@ def lade_zugang() -> dict:
         "host": os.environ.get("DEPLOY_HOST", daten.get("host", "")),
         "user": os.environ.get("DEPLOY_USER", daten.get("user", "")),
         "password": os.environ.get("DEPLOY_PASSWORD", daten.get("password", "")),
+        "ssh_key_pfad": daten.get("ssh_key_pfad", ""),
         "ziel": os.environ.get("DEPLOY_ZIEL", daten.get("ziel", "")),
         "hostname_erwartet": os.environ.get(
             "DEPLOY_HOSTNAME_ERWARTET", daten.get("hostname_erwartet", "")),
@@ -64,9 +65,13 @@ def lade_zugang() -> dict:
                                     daten.get("ziel_user", "")),
         "tools_python_pfad": daten.get("tools_python_pfad", ""),
     }
-    fehlt = [k for k in ("host", "user", "password", "ziel",
-                         "hostname_erwartet", "ziel_user",
-                         "tools_python_pfad") if not zugang[k]]
+    key = ROOT / zugang["ssh_key_pfad"] if zugang["ssh_key_pfad"] else None
+    if key and key.exists():
+        zugang["password"] = ""          # Key-Auth: Passwort nicht noetig
+    fehlt = [k for k in ("host", "user", "ziel", "hostname_erwartet",
+                         "ziel_user", "tools_python_pfad") if not zugang[k]]
+    if not zugang["password"] and not (key and key.exists()):
+        fehlt.append("password ODER ssh_key_pfad")
     if fehlt:
         raise SystemExit(f"Zugangsdaten unvollstaendig ({', '.join(fehlt)}): "
                          f"{pfad} anlegen oder Env-Variablen setzen.")
@@ -78,8 +83,12 @@ class Ziel:
         self.zugang = zugang
         self.ssh = paramiko.SSHClient()
         self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        key_pfad = zugang.get("ssh_key_pfad") or ""
+        key = (paramiko.Ed25519Key.from_private_key_file(
+                   str(ROOT / key_pfad)) if key_pfad else None)
         self.ssh.connect(zugang["host"], username=zugang["user"],
-                         password=zugang["password"], timeout=15)
+                         pkey=key, password=zugang["password"] or None,
+                         timeout=15)
         self.sftp = self.ssh.open_sftp()
         self.ziel = zugang["ziel"].replace("\\", "/")
 

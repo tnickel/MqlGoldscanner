@@ -37,3 +37,4 @@ config/deploy.local.json
 config/goldscanner_contabo_key*
 scratch_*.py
 scratch_*.txt
+config/goldscanner_ziel_key*
