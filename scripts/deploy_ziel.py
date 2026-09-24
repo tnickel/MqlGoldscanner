@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Deployment: MqlGoldscanner -> Zielrechner ZIELRECHNER (C:\\Forex\\MqlGoldscanner).
+"""Deployment: MqlGoldscanner auf den konfigurierten Zielrechner.
 
 Analog zum KiScanner-Deploy (dort scripts/deploy_ns1mqsv.py), ergaenzt um:
 
@@ -12,12 +12,15 @@ Analog zum KiScanner-Deploy (dort scripts/deploy_ns1mqsv.py), ergaenzt um:
 Schritte: verbinden + Hostname-Absicherung -> Python sicherstellen ->
 Code/config/Datenbank-Sync (SQLite via backup-API, konsistent auch bei
 laufender App) -> Ziel-Settings patchen (Default-Attach ans laufende
-Vantage-Terminal, NIEMALS Selbststart: dort haengt eine Live-Bridge dran)
--> .venv + requirements -> App + Daemon starten -> Health pruefen.
+Broker-Terminal, NIEMALS Selbststart) -> .venv + requirements ->
+App + Daemon starten -> Health pruefen.
 
 Aufruf:  python scripts/deploy_ns1mqsv.py [--code-only] [--kein-start]
-Zugang:  config/deploy.local.json (gitignored) oder
-         Env DEPLOY_HOST / DEPLOY_USER / DEPLOY_PASSWORD.
+Zugang:  config/deploy.local.json (gitignored) mit host, user, password,
+         ziel (Zielordner), hostname_erwartet (Falsch-Rechner-Schutz),
+         ziel_user (Session, in der die Apps laufen sollen) und
+         tools_python_pfad (portables Python am Ziel) — oder Env
+         DEPLOY_HOST / DEPLOY_USER / DEPLOY_PASSWORD.
 """
 from __future__ import annotations
 
@@ -34,9 +37,6 @@ import paramiko
 ROOT = Path(__file__).resolve().parents[1]
 NUGET = ROOT / "deploy-cache" / "python-3.12.10.nupkg"
 NUGET_URL = "https://www.nuget.org/api/v2/package/python/3.12.10"
-TOOLS_PY = "TOOLS-PYTHON/python.exe"
-ERWARTETER_HOSTNAME = "ZIELRECHNER"
-ZIEL_USER = "<ziel_user>"   # Desktop-Session des Nutzers auf dem Zielrechner
 
 CODE_ORDNER_AUS = {".git", "__pycache__", ".venv", "deploy-cache", "data",
                    "node_modules", ".pytest_cache", ".ruff_cache",
@@ -57,11 +57,16 @@ def lade_zugang() -> dict:
         "host": os.environ.get("DEPLOY_HOST", daten.get("host", "")),
         "user": os.environ.get("DEPLOY_USER", daten.get("user", "")),
         "password": os.environ.get("DEPLOY_PASSWORD", daten.get("password", "")),
-        "ziel": daten.get("ziel", r"ZIELORDNER"),
-        "hostname_erwartet": daten.get("hostname_erwartet",
-                                       ERWARTETER_HOSTNAME),
+        "ziel": os.environ.get("DEPLOY_ZIEL", daten.get("ziel", "")),
+        "hostname_erwartet": os.environ.get(
+            "DEPLOY_HOSTNAME_ERWARTET", daten.get("hostname_erwartet", "")),
+        "ziel_user": os.environ.get("DEPLOY_ZIEL_USER",
+                                    daten.get("ziel_user", "")),
+        "tools_python_pfad": daten.get("tools_python_pfad", ""),
     }
-    fehlt = [k for k in ("host", "user", "password") if not zugang[k]]
+    fehlt = [k for k in ("host", "user", "password", "ziel",
+                         "hostname_erwartet", "ziel_user",
+                         "tools_python_pfad") if not zugang[k]]
     if fehlt:
         raise SystemExit(f"Zugangsdaten unvollstaendig ({', '.join(fehlt)}): "
                          f"{pfad} anlegen oder Env-Variablen setzen.")
@@ -153,53 +158,52 @@ def hostname_absichern(ziel: Ziel) -> None:
 
 
 def tools_python_sicherstellen(ziel: Ziel) -> str:
-    """Portables Python unter C:\\Forex\\Tools\\Python312 (NuGet-Paket,
-    ausserhalb der Nutzerprofile — laeuft auch in der TRADER-Session).
+    """Portables Python am Ziel (NuGet-Paket, ausserhalb der
+    Nutzerprofile — laeuft auch in der Session des Ziel-Users).
 
     NuGet statt python.org-Installer: der Bootstrapper sieht ein
     vorhandenes per-user-Python als 'bereits installiert' und tut dann
     still nichts. NuGet-Python bringt pip NICHT mit -> einmal
     ensurepip im Basis-Python, sonst bekommen die venvs kein pip."""
-    out, _, _ = ziel.run(f'"{TOOLS_PY}" --version')
-    if out.strip().startswith("Python 3.1"):
-        _log("python", f"vorhanden: {out.strip()} ({TOOLS_PY})")
-    else:
+    tools_py = ziel.zugang["tools_python_pfad"].replace("\\", "/")
+    out, _, _ = ziel.run(f'"{tools_py}" --version')
+    if not out.strip().startswith("Python 3.1"):
         if not NUGET.exists():
             raise SystemExit(f"NuGet-Paket fehlt lokal: {NUGET} — einmal "
                              f'laden: curl -L -o "{NUGET}" {NUGET_URL}')
-        _log("python", "entpacke portables Python 3.12.10 nach "
-                       "C:\\Forex\\Tools\\Python312 …")
+        _log("python", "entpacke portables Python (NuGet) …")
         ziel.sftp.put(str(NUGET), "C:/Users/Public/python.nupkg.zip")
-        ziel.ps("Remove-Item -Recurse -Force C:\\Forex\\Tools\\Python312, "
-                "C:\\Forex\\Tools\\py_tmp -ErrorAction SilentlyContinue; "
+        basis = tools_py.rsplit("/", 1)[0]
+        ziel.ps(f"Remove-Item -Recurse -Force '{basis}', "
+                f"'{basis}_tmp' -ErrorAction SilentlyContinue; "
                 "Expand-Archive -Path C:\\Users\\Public\\python.nupkg.zip "
-                "-DestinationPath C:\\Forex\\Tools\\py_tmp -Force; "
-                "New-Item -ItemType Directory -Force -Path "
-                "C:\\Forex\\Tools\\Python312 | Out-Null; "
-                "Move-Item C:\\Forex\\Tools\\py_tmp\\tools\\* "
-                "C:\\Forex\\Tools\\Python312\\; "
-                "Remove-Item -Recurse -Force C:\\Forex\\Tools\\py_tmp",
+                f"-DestinationPath '{basis}_tmp' -Force; "
+                f"Move-Item '{basis}_tmp\\tools\\*' '{basis}\\'; "
+                f"Remove-Item -Recurse -Force '{basis}_tmp'",
                 timeout=300)
-        out, err, _ = ziel.run(f'"{TOOLS_PY}" --version')
+        out, err, _ = ziel.run(f'"{tools_py}" --version')
         if not out.strip().startswith("Python"):
             raise SystemExit(f"Tools-Python laeuft nicht: {out.strip()} "
                              f"{err.strip()[:200]}")
-    out, _, _ = ziel.run(f'"{TOOLS_PY}" -m pip --version')
+    out, _, _ = ziel.run(f'"{tools_py}" -m pip --version')
     if "No module named pip" in out:
         _log("python", "pip fehlt im Basis-Python -> ensurepip …")
-        ziel.run(f'"{TOOLS_PY}" -m ensurepip --upgrade', timeout=300)
-    _log("python", f"bereit: {TOOLS_PY}")
-    return TOOLS_PY
+        ziel.run(f'"{tools_py}" -m ensurepip --upgrade', timeout=300)
+    _log("python", f"bereit: {out.strip() or tools_py}")
+    return tools_py
 
 
 def rechte_setzen(ziel: Ziel) -> None:
-    """Der Ziel-User (Trader-Session) braucht Vollzugriff auf Projekt und
-    Python — beide liegen im C:\\Forex-Baum, nicht in seinem Profil."""
-    for pfad in (ziel.ziel, "TOOLS-PYTHON"):
+    """Der Ziel-User braucht Vollzugriff auf Projekt und Python — beide
+    liegen bewusst ausserhalb seines Nutzerprofils."""
+    for pfad in (ziel.ziel,
+                 ziel.zugang["tools_python_pfad"].replace("\\", "/")
+                 .rsplit("/", 1)[0]):
         _, err, _ = ziel.run(
             f'icacls "{pfad.replace("/", chr(92))}" '
-            f"/grant {ZIEL_USER}:(OI)(CI)F /T /C /Q", timeout=600)
-        _log("rechte", f"{pfad} -> {ZIEL_USER} voll"
+            f"/grant {ziel.zugang['ziel_user']}:(OI)(CI)F /T /C /Q",
+            timeout=600)
+        _log("rechte", f"{pfad} -> {ziel.zugang['ziel_user']} voll"
               + ("" if "fehler" not in (err or "").lower() else
                  f" (Hinweis: {err[:100]})"))
 
@@ -289,9 +293,10 @@ def venv_und_pakete(ziel: Ziel, python_exe: str) -> None:
 
 def task_anlegen(ziel: Ziel, name: str, bat: str, onstart: bool,
                  minimiert_titel: str = "MqlGoldscanner") -> None:
-    """Task ALS ZIEL-USER (Trader-Session, Interactive ohne Passwort —
-    laeuft wenn trader angemeldet ist, der Normalzustand dort; Fenster
-    sind sichtbar). OHNE Zeitlimit: schtasks-Default killt nach 72 h."""
+    """Task ALS ZIEL-USER (Interactive ohne Passwort — laeuft in dessen
+    Desktop-Session, Fenster sind sichtbar, solange er angemeldet ist).
+    OHNE Zeitlimit: schtasks-Default killt nach 72 h."""
+    ziel_user = ziel.zugang["ziel_user"]
     trigger = ("$t = New-ScheduledTaskTrigger -AtStartup"
                if onstart else
                "$t = New-ScheduledTaskTrigger -Once -At "
@@ -304,13 +309,13 @@ def task_anlegen(ziel: Ziel, name: str, bat: str, onstart: bool,
         "(New-TimeSpan -Seconds 0) -AllowStartIfOnBatteries "
         "-DontStopIfGoingOnBatteries -StartWhenAvailable; "
         f"Register-ScheduledTask -TaskName '{name}' -Action $a -Trigger $t "
-        f"-Settings $s -User '{ZIEL_USER}' -Force | Out-Null; 'angelegt'")
+        f"-Settings $s -User '{ziel_user}' -Force | Out-Null; 'angelegt'")
     out, err, _ = ziel.ps(skript, timeout=90)
     _log("task", f"{name}: {out.strip() or err.strip()[:160]}")
 
 
 def daemon_starten(ziel: Ziel) -> None:
-    """Daemon als TRADER über start_goldscanner_daemon.bat ( detached;
+    """Daemon über start_goldscanner_daemon.bat (detached;
     starte_detached() verhindert Doppelläufe selbst)."""
     bat = ziel.ziel.replace("/", chr(92)) + "\\start_goldscanner_daemon.bat"
     task_anlegen(ziel, "MqlGoldscanner Daemon", bat, onstart=True,
@@ -371,8 +376,8 @@ def main() -> None:
             daemon_starten(ziel)
             app_starten(ziel)
         _log("fertig", f"MqlGoldscanner liegt unter {zugang['ziel']} "
-                       f"(laeuft als {ZIEL_USER}: App 8505, REST 8606 lazy, "
-                       "Daemon-Task + App-Autostart).")
+                       f"(laeuft als {zugang['ziel_user']}: App 8505, "
+                       "REST 8606 lazy, Daemon-Task + App-Autostart).")
     finally:
         ziel.close()
 
