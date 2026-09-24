@@ -30,3 +30,5 @@ venv/
 *.iml
 .vscode/
 target/
+deploy-cache/
+config/deploy.local.json

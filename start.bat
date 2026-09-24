@@ -6,7 +6,12 @@ chcp 65001 >nul
 title MqlGoldscanner
 cd /d "%~dp0"
 
-where python >nul 2>nul
+rem Bevorzugt das Projekt-venv (falls vorhanden, z. B. nach Deploy auf
+rem anderen Rechnern), sonst das System-Python.
+set "PYTHON=python"
+if exist ".venv\Scripts\python.exe" set "PYTHON=.venv\Scripts\python.exe"
+
+%PYTHON% --version >nul 2>nul
 if errorlevel 1 (
     echo Python nicht gefunden. Bitte Python 3.12+ installieren und PATH setzen.
     pause
@@ -35,9 +40,17 @@ echo Starte MqlGoldscanner - Browser oeffnet sich gleich ...
 rem Browser im Standard-Browser oeffnen, SOBALD der Server lauscht:
 rem ein minimiertes PowerShell-Hilfsfenster pollt den Port (max. 30 s,
 rem sprachneutral ueber Get-NetTCPConnection) und oeffnet dann die Seite.
+if not exist ".venv\Scripts\python.exe" (
+    %PYTHON% -c "import streamlit, plotly, MetaTrader5, reportlab, pandas, openpyxl" >nul 2>nul
+    if errorlevel 1 (
+        echo [Setup] Abhaengigkeiten fehlen - installiere requirements.txt ...
+        %PYTHON% -m pip install -r requirements.txt
+    )
+)
+
 start "" /min powershell -NoProfile -Command "for($i=0;$i -lt 60;$i++){ if(Get-NetTCPConnection -LocalPort 8505 -State Listen -ErrorAction SilentlyContinue){ break }; Start-Sleep -Milliseconds 500 }; Start-Process 'http://localhost:8505/'"
 
-python -m streamlit run streamlit_app.py --server.port 8505 --browser.gatherUsageStats false
+%PYTHON% -m streamlit run streamlit_app.py --server.port 8505 --browser.gatherUsageStats false
 if errorlevel 1 (
     echo.
     echo Start fehlgeschlagen. Vermutlich fehlen Pakete - bitte ausfuehren:
