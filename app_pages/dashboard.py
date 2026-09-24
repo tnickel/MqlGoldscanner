@@ -31,7 +31,7 @@ if "matrix" not in st.session_state:
             pass
 
 page_header(
-    "Stufe 2–5 · Statistik + Modell + KI-Erklärung + Richtung",
+    "MqlGoldscanner · Stufe 2–5 · Statistik + Modell + KI-Erklärung + Richtung",
     "Gold-Bewegungswahrscheinlichkeit je Wochentag",
     "Hauptziel: pro Tag **Wahrscheinlichkeit**, **erwartete Range** und "
     "**Richtung** (P(hoch)). Die Matrix zeigt P_stat aus dem HAR-Modell (HAR-Lags "

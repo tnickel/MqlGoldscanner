@@ -247,12 +247,28 @@ def sync(ziel: Ziel) -> None:
 
     ziel.mkdir_p(f"{ziel.ziel}/data")
     db_deploy = db_lokal_spiegeln()
+    # ATOMAR: erst unter Temp-Namen hochladen, dann tauschen. Ein SFTP-put
+    # direkt auf die Zieldatei trunciert sie — scheitert der Upload (App/
+    # Daemon haelt die Datei offen), bliebe eine KORRUPTEDB zurueck.
+    tmp_remote = f"{ziel.ziel}/data/{DB_NAME}.upload_tmp"
+    ziel_db = f"{ziel.ziel}/data/{DB_NAME}"
     try:
-        ziel.sftp.put(str(db_deploy), f"{ziel.ziel}/data/{DB_NAME}")
+        ziel.sftp.put(str(db_deploy), tmp_remote)
+        ziel.sftp.remove(ziel_db)          # scheitert, wenn Datei offen ist
+        ziel.sftp.rename(tmp_remote, ziel_db)
+        for suffix in ("-wal", "-shm"):
+            try:
+                ziel.sftp.remove(ziel_db + suffix)
+            except FileNotFoundError:
+                pass
         _log("sync", f"{DB_NAME} ({db_deploy.stat().st_size / 1e6:.1f} MB, "
-                     "konsistent gespiegelt; reports/runs/exports entstehen "
-                     "dort neu)")
+                     "konsistent gespiegelt, atomar getauscht; reports/runs/"
+                     "exports entstehen dort neu)")
     except OSError as exc:
+        try:
+            ziel.sftp.remove(tmp_remote)   # Halbupload weg, Original intakt
+        except OSError:
+            pass
         _log("sync", f"{DB_NAME} NICHT synchronisiert ({exc}) — am Ziel "
                      "laeuft die App/Daemon und haelt die Datei; DB-Sync "
                      "später wiederholen, wenn kein Lauf aktiv ist.")

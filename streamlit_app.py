@@ -45,7 +45,11 @@ settings = config.load_settings()
 with st.sidebar:
     with st.container(key="sidebar_brand", gap="xsmall"):
         st.caption("GOLD MARKET RESEARCH · FORENSIC SCANNER")
-        st.header("MqlGoldscanner")
+        st.markdown(
+            '<span style="font-size:1.6rem;font-weight:900;'
+            'color:#F5D67B;letter-spacing:.4px;display:block;'
+            'line-height:1.1">MqlGoldscanner</span>',
+            unsafe_allow_html=True)
         st.caption("Wahrscheinlichkeit vor Richtung")
     with st.container(border=True):
         st.markdown("**Systemstatus**")
