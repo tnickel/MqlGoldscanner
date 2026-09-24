@@ -247,9 +247,15 @@ def sync(ziel: Ziel) -> None:
 
     ziel.mkdir_p(f"{ziel.ziel}/data")
     db_deploy = db_lokal_spiegeln()
-    ziel.sftp.put(str(db_deploy), f"{ziel.ziel}/data/{DB_NAME}")
-    _log("sync", f"{DB_NAME} ({db_deploy.stat().st_size / 1e6:.1f} MB, "
-                 "konsistent gespiegelt; reports/runs/exports entstehen dort neu)")
+    try:
+        ziel.sftp.put(str(db_deploy), f"{ziel.ziel}/data/{DB_NAME}")
+        _log("sync", f"{DB_NAME} ({db_deploy.stat().st_size / 1e6:.1f} MB, "
+                     "konsistent gespiegelt; reports/runs/exports entstehen "
+                     "dort neu)")
+    except OSError as exc:
+        _log("sync", f"{DB_NAME} NICHT synchronisiert ({exc}) — am Ziel "
+                     "laeuft die App/Daemon und haelt die Datei; DB-Sync "
+                     "später wiederholen, wenn kein Lauf aktiv ist.")
 
     settings = settings_patched()
     patch_pfad = ROOT / "deploy-cache" / "app_settings.ziel.json"
